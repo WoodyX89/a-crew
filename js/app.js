@@ -243,3 +243,155 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === modal) modal.classList.remove('active');
     });
 });
+
+// Sample data - replace with Supabase fetch later
+let currentDate = new Date();
+let sampleSchedule = {
+    "2026-04-15": [
+        { name: "John Doe", area: "Packaging Line 1", status: "working" },
+        { name: "Sarah Chen", area: "Mixing Station", status: "working" }
+    ],
+    "2026-04-16": [
+        { name: "Mike Torres", area: "Warehouse", status: "working" },
+        { name: "Emma Wilson", area: "", status: "vacation" }
+    ],
+    "2026-04-20": [
+        { name: "Alex Rivera", area: "Quality Control", status: "working" }
+    ]
+    // Add more dates as needed
+};
+
+function renderCalendar() {
+    const grid = document.getElementById('calendarGrid');
+    grid.innerHTML = '';
+
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    document.getElementById('monthYear').textContent = 
+        currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+    // Previous month filler days
+    for (let i = firstDay - 1; i >= 0; i--) {
+        const dayEl = createDayElement(daysInPrevMonth - i, true);
+        grid.appendChild(dayEl);
+    }
+
+    // Current month
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const dayEl = createDayElement(day, false, dateStr);
+        grid.appendChild(dayEl);
+    }
+
+    // Next month filler
+    const remaining = 42 - (firstDay + daysInMonth); // 6 weeks max
+    for (let day = 1; day <= remaining; day++) {
+        const dayEl = createDayElement(day, true);
+        grid.appendChild(dayEl);
+    }
+}
+
+function createDayElement(dayNum, isOtherMonth, dateStr = '') {
+    const dayEl = document.createElement('div');
+    dayEl.className = `calendar-day ${isOtherMonth ? 'other-month' : ''}`;
+    
+    if (dateStr && new Date(dateStr).toDateString() === new Date().toDateString()) {
+        dayEl.classList.add('today');
+    }
+
+    dayEl.innerHTML = `
+        <div class="day-number">${dayNum}</div>
+        <div class="shift-dots"></div>
+    `;
+
+    if (dateStr && sampleSchedule[dateStr]) {
+        const dotsContainer = dayEl.querySelector('.shift-dots');
+        sampleSchedule[dateStr].forEach(shift => {
+            const dot = document.createElement('div');
+            dot.className = `dot ${shift.status === 'vacation' ? 'vacation' : 'working'}`;
+            dotsContainer.appendChild(dot);
+        });
+    }
+
+    // Click to show details
+    dayEl.addEventListener('click', () => {
+        if (dateStr) showDayDetails(dateStr);
+    });
+
+    return dayEl;
+}
+
+function showDayDetails(dateStr) {
+    const detailsPanel = document.getElementById('dayDetails');
+    const dateTitle = document.getElementById('selectedDate');
+    const list = document.getElementById('scheduleList');
+
+    const dateObj = new Date(dateStr);
+    dateTitle.textContent = dateObj.toLocaleDateString('en-US', { 
+        weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' 
+    });
+
+    list.innerHTML = '';
+
+    const shifts = sampleSchedule[dateStr] || [];
+
+    if (shifts.length === 0) {
+        list.innerHTML = '<p style="opacity:0.7;">No one scheduled for this day.</p>';
+    } else {
+        shifts.forEach(shift => {
+            const item = document.createElement('div');
+            item.className = `shift-item ${shift.status}`;
+            item.innerHTML = `
+                <strong>${shift.name}</strong><br>
+                ${shift.status === 'vacation' ? 
+                    '<span style="color:#FF4D4D;">On Vacation</span>' : 
+                    `Working in: <strong>${shift.area}</strong>`}
+            `;
+            list.appendChild(item);
+        });
+    }
+
+    detailsPanel.classList.add('open');
+}
+
+// Event listeners
+document.getElementById('prevMonth').addEventListener('click', () => {
+    currentDate.setMonth(currentDate.getMonth() - 1);
+    renderCalendar();
+});
+
+document.getElementById('nextMonth').addEventListener('click', () => {
+    currentDate.setMonth(currentDate.getMonth() + 1);
+    renderCalendar();
+});
+
+document.getElementById('todayBtn').addEventListener('click', () => {
+    currentDate = new Date();
+    renderCalendar();
+});
+
+document.getElementById('closeDetails').addEventListener('click', () => {
+    document.getElementById('dayDetails').classList.remove('open');
+});
+
+// Initialize
+renderCalendar();
+
+// Register Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => {
+        console.log('✅ Service Worker registered!', reg.scope);
+      })
+      .catch(err => {
+        console.log('❌ Service Worker registration failed:', err);
+      });
+  });
+}
+

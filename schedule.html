@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A Crew</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- Favicon -->
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="shortcut icon" href="favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="favicon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+
+<!-- Reusable Navbar -->
+<div id="navbar-placeholder"></div>
+
+  <!-- Dashboard Content -->
+<div class="main-content">
+    <h1 class="welcome">Welcome, <span id="fullName">Crew Member</span>!</h1>
+    
+    <h2 style="color: #00C7B2; margin: 2rem 0 1rem;">Crew Schedule Calendar</h2>
+    
+    <!-- Calendar Container -->
+    <div class="calendar-container">
+        <!-- Header -->
+        <div class="calendar-header">
+            <button id="prevMonth" class="nav-btn"><i class="fas fa-chevron-left"></i></button>
+            <div id="monthYear" class="month-year"></div>
+            <button id="nextMonth" class="nav-btn"><i class="fas fa-chevron-right"></i></button>
+            <button id="todayBtn" class="today-btn">Today</button>
+        </div>
+
+        <!-- Weekday Headers -->
+        <div class="weekdays">
+            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div>
+            <div>Thu</div><div>Fri</div><div>Sat</div>
+        </div>
+
+        <!-- Calendar Grid -->
+        <div id="calendarGrid" class="calendar-grid"></div>
+    </div>
+
+    <!-- Day Details Sidebar -->
+    <div id="dayDetails" class="day-details">
+        <button id="closeDetails" class="close-btn">✕</button>
+        <h3 id="selectedDate"></h3>
+        <div id="scheduleList" class="schedule-list"></div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
