@@ -1,0 +1,424 @@
+/* styles.css */
+
+:root {
+    --navbar: #124352;
+    --teal: #00C7B2;
+    --green: #55CE33;
+}
+
+* { 
+    margin: 0; 
+    padding: 0; 
+    box-sizing: border-box; 
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #035747, #022f3a);
+    color: white;
+    min-height: 100vh;
+    line-height: 1.5;
+}
+
+/* Navbar */
+.navbar {
+    background: var(--navbar);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 4px 15px rgba(18, 67, 82, 0.4);
+}
+
+.nav-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem 1.2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.logo-img { 
+    height: 80px; 
+    width: auto; 
+}
+
+.brand-name {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: white;
+}
+
+.nav-links {
+    display: flex;
+    gap: 2.2rem;
+}
+
+.nav-links a {
+    color: white;
+    text-decoration: none;
+    font-weight: 500;
+    position: relative;
+    padding: 8px 0;
+}
+
+.nav-links a::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 0;
+    height: 3px;
+    background: var(--teal);
+    transition: width 0.4s ease;
+}
+
+.nav-links a:hover::after { width: 100%; }
+.nav-links a:hover { color: var(--teal); }
+
+.logout-btn {
+    padding: 10px 24px;
+    background: var(--teal);
+    color: #124352;
+    border: none;
+    border-radius: 50px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 1rem;
+}
+
+.logout-btn:hover {
+    background: #FFFFFF;
+    transform: translateY(-2px);
+}
+
+.hamburger {
+    display: none;
+    font-size: 1.8rem;
+    cursor: pointer;
+    color: white;
+    background: none;
+    border: none;
+    padding: 8px;
+}
+
+/* Mobile Menu */
+.mobile-menu {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: var(--navbar);
+    z-index: 2000;
+    padding: 1.5rem;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.mobile-menu.active {
+    display: flex;
+}
+
+.mobile-links {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+    margin-top: 2rem;
+}
+
+.mobile-link {
+    color: white;
+    text-decoration: none;
+    font-size: 1.45rem;
+    font-weight: 500;
+    padding: 14px 20px;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.mobile-link:hover,
+.mobile-link:active,
+.mobile-link.active {
+    background: var(--teal);
+    color: #124352;
+    transform: translateX(8px);
+}
+
+.mobile-link:active {
+    background: #ffffff;
+    color: #124352;
+    transform: scale(0.98);
+}
+
+/* Main Content */
+.main-content {
+    max-width: 1200px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+.welcome {
+    font-size: 2.4rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.card {
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 1.5rem;
+    border: 1px solid rgba(0,199,178,0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Desktop Table */
+.members-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(255,255,255,0.03);
+    border-radius: 12px;
+    overflow: hidden;
+    display: table;
+}
+
+th, td {
+    padding: 16px 18px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+
+th {
+    background: rgba(255,255,255,0.06);
+    color: var(--teal);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.6px;
+}
+
+td {
+    color: #e0f0ff;
+    vertical-align: middle;
+}
+
+.status {
+    padding: 6px 16px;
+    border-radius: 30px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.status.active {
+    background: var(--green);
+    color: #124352;
+}
+
+/* Mobile Cards */
+.members-list {
+    display: none;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.member-card {
+    background: rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 1.25rem;
+    border: 1px solid rgba(0,199,178,0.15);
+}
+
+.member-card strong {
+    color: var(--teal);
+    font-size: 1.1rem;
+}
+
+.member-info {
+    display: flex;
+    justify-content: space-between;
+    margin: 0.6rem 0;
+    font-size: 0.95rem;
+}
+
+.member-info span:first-child {
+    opacity: 0.8;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .nav-links { display: none; }
+    .hamburger { display: block; }
+    
+    .main-content { 
+        margin: 1.5rem auto; 
+        padding: 0 0.8rem; 
+    }
+    
+    .welcome { font-size: 2.1rem; }
+    
+    /* Hide table, show cards on mobile */
+    .members-table { display: none; }
+    .members-list { display: flex; }
+    
+    .card { padding: 1.2rem; }
+}
+
+@media (max-width: 480px) {
+    .member-card {
+        padding: 1.1rem;
+    }
+    
+    .brand-name {
+        font-size: 1.55rem;
+    }
+}
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 3000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background: #022f3a;
+    border-radius: 20px;
+    width: 90%;
+    max-width: 500px;
+    border: 1px solid rgba(0, 199, 178, 0.3);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 1.8rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.modal-header h2 {
+    margin: 0;
+    color: var(--teal);
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 2rem;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.close-btn:hover {
+    opacity: 1;
+    color: var(--teal);
+}
+
+.form-group {
+    padding: 0 1.8rem;
+    margin: 1.2rem 0;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    color: #a0d8ff;
+    font-size: 0.95rem;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(0,199,178,0.3);
+    border-radius: 12px;
+    color: white;
+    font-size: 1rem;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--teal);
+    box-shadow: 0 0 0 3px rgba(0,199,178,0.2);
+}
+
+.form-actions {
+    padding: 1.5rem 1.8rem;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    margin-top: 1rem;
+}
+
+.cancel-btn, .save-btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 50px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.cancel-btn {
+    background: rgba(255,255,255,0.1);
+    color: white;
+}
+
+.cancel-btn:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.save-btn {
+    background: var(--teal);
+    color: #124352;
+}
+
+.save-btn:hover {
+    background: #ffffff;
+    transform: translateY(-2px);
+}
+
+/* Action buttons in table */
+.action-btn {
+    padding: 6px 12px;
+    margin: 0 4px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.edit-btn {
+    background: var(--teal);
+    color: #124352;
+}
+
+.delete-btn {
+    background: #e74c3c;
+    color: white;
+}

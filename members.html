@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Crew - Members</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="favicon.png" type="image/png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <!-- Navbar -->
+    <div id="navbar-placeholder"></div>
+
+    <div class="main-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h1 class="welcome">All Members</h1>
+            <button id="addMemberBtn" class="logout-btn" style="background: var(--green);">
+                <i class="fas fa-plus"></i> Add New Member
+            </button>
+        </div>
+
+        <div class="card">
+            <!-- Desktop Table -->
+            <table class="members-table" id="membersTable">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Joined</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="membersBody"></tbody>
+            </table>
+
+            <!-- Mobile Cards -->
+            <div class="members-list" id="membersList"></div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Member Modal -->
+    <div id="memberModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add New Member</h2>
+                <button id="closeModal" class="close-btn">&times;</button>
+            </div>
+            
+            <form id="memberForm">
+                <input type="hidden" id="memberId">
+
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="fullName" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="email" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="tel" id="phone">
+                </div>
+
+                <div class="form-group">
+                    <label>Role</label>
+                    <select id="role" required>
+                        <option value="Supervisor">Supervisor</option>
+                        <option value="Lead Hand">Lead Hand</option>
+                        <option value="Group 1">Group 1</option>
+                        <option value="Group 2">Group 2</option>
+                        <option value="Group 3">Group 3</option>
+                        <option value="Group 4">Group 4</option>
+                        <option value="Group 5">Group 5</option>
+                        <option value="Group 6">Group 6</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="status">
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" id="cancelBtn" class="cancel-btn">Cancel</button>
+                    <button type="submit" id="saveBtn" class="save-btn">Save Member</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
