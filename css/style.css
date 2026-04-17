@@ -583,3 +583,29 @@ td {
 .close-btn:hover {
     color: white;
 }
+
+.action-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.action-btn:hover {
+  background: rgba(0, 199, 178, 0.25);
+  transform: translateY(-2px);
+}
+
+.like-pop {
+  animation: pop 0.6s ease;
+}
+
+@keyframes pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.6); }
+  100% { transform: scale(1); }
+}
