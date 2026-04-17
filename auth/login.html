@@ -1,192 +1,204 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - A Crew</title>
-  
-  <!-- Favicon -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login - A Crew</title>
+
+<!-- Favicon -->
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="shortcut icon" href="favicon.png" type="image/png">
-<link rel="apple-touch-icon" href="favicon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
-<link rel="icon" type="image/png" sizes="16x16" href="favicon.png">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="apple-touch-icon" href="/assets/logo.png">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#00C7B2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="/assets/logo.png">  
-  
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
-body {
-    font-family: 'Segoe UI', sans-serif;
-    background: linear-gradient(135deg, #035747, #022f3a);
-    color: white;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0;
-}
-
-.card {
-    background: rgba(255,255,255,0.12);
-    backdrop-filter: blur(12px);
-    padding: 40px 35px;
-    border-radius: 24px;
-    width: 100%;
-    max-width: 400px;
-    border: 1px solid rgba(0,199,178,0.3);
-    text-align: center;
-}
-
-.logo {
-    width: 120px;
-    height: 120px;
-    margin: 0 auto 30px auto;
-    border-radius: 20px;
-    object-fit: contain;
-    display: block;
-}
-
-input {
-    width: 100%;
-    max-width: 340px;
-    padding: 15px;
-    margin: 12px auto;
-    background: rgba(255,255,255,0.15);
-    border: 1px solid rgba(0,199,178,0.5);
-    border-radius: 12px;
-    color: white;
-    font-size: 1rem;
-    display: block;
-}
-
-.btn {
-    width: 100%;
-    max-width: 340px;
-    padding: 16px;
-    background: #00C7B2;
-    color: #124352;
-    border: none;
-    border-radius: 50px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    cursor: pointer;
-    margin: 25px auto 0;
-    display: block;
-}
-
-.btn:hover { 
-    background: #55CE33; 
-}
-
-/* FIXED Remember Me - Bigger checkbox + properly beside text */
-.remember-me {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    margin: 22px 0 18px 0;
-    font-size: 1rem;
-    cursor: pointer;
-}
-
-.remember-me input[type="checkbox"] {
-    width: 22px;
-    height: 22px;
-    accent-color: #00C7B2;
-    cursor: pointer;
-    margin: 0;
-}
-
-.remember-me label {
-    margin: 0;
-    user-select: none;
-    font-weight: 500;
-}
-
-@media (max-width: 480px) {
+    /* Your existing styles remain exactly the same */
+    body {
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        background: linear-gradient(135deg, #035747, #022f3a);
+        color: white;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+    }
     .card {
-        padding: 35px 25px;
-        margin: 15px;
+        background: rgba(255,255,255,0.12);
+        backdrop-filter: blur(12px);
+        padding: 40px 35px;
+        border-radius: 24px;
+        width: 100%;
+        max-width: 400px;
+        border: 1px solid rgba(0,199,178,0.3);
+        text-align: center;
     }
     .logo {
-        width: 100px;
-        height: 100px;
+        width: 120px;
+        height: 120px;
+        margin: 0 auto 30px auto;
+        border-radius: 20px;
+        object-fit: contain;
+        display: block;
     }
-    input, .btn {
-        max-width: 100%;
+    input {
+        width: 100%;
+        max-width: 340px;
+        padding: 15px;
+        margin: 12px auto;
+        background: rgba(255,255,255,0.15);
+        border: 1px solid rgba(0,199,178,0.5);
+        border-radius: 12px;
+        color: white;
+        font-size: 1rem;
+        display: block;
+    }
+    .btn {
+        width: 100%;
+        max-width: 340px;
+        padding: 16px;
+        background: #00C7B2;
+        color: #124352;
+        border: none;
+        border-radius: 50px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        cursor: pointer;
+        margin: 25px auto 0;
+        display: block;
+    }
+    .btn:hover { background: #55CE33; }
+    .forgot-password {
+        color: #00C7B2;
+        text-decoration: none;
+        font-size: 0.95rem;
+        margin-top: 15px;
+        display: inline-block;
+        cursor: pointer;
+    }
+    .forgot-password:hover { text-decoration: underline; }
+    .remember-me {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin: 22px 0 18px 0;
+        font-size: 1rem;
+        cursor: pointer;
     }
     .remember-me input[type="checkbox"] {
-        width: 20px;
-        height: 20px;
+        width: 22px;
+        height: 22px;
+        accent-color: #00C7B2;
+        margin: 0;
     }
-}
+    @media (max-width: 480px) {
+        .card { padding: 35px 25px; margin: 15px; }
+        .logo { width: 100px; height: 100px; }
+    }
+    .success-msg {
+        color: #00ff9d;
+        background: rgba(0, 255, 157, 0.15);
+        padding: 12px;
+        border-radius: 12px;
+        margin: 15px 0;
+        font-size: 0.95rem;
+        display: none;
+    }
 </style>
 </head>
 <body>
-
-  <div class="card">
-    <!-- Replace your current img tag with this -->
-    <img src="../assets/logo.png" 
-     alt="A Crew Logo" 
-     class="logo">
+<div class="card">
+    <img src="../assets/logo.png" alt="A Crew Logo" class="logo">
     
     <form id="loginForm">
-      <input type="email" id="email" placeholder="Email" required>
-      <input type="password" id="password" placeholder="Password" required>
-      
-      <!-- Remember Me inside the box -->
-      <div class="remember-me">
-        <input type="checkbox" id="rememberMe">
-        <label for="rememberMe">Remember me</label>
-      </div>
-
-      <button type="submit" class="btn">Login</button>
+        <input type="email" id="email" placeholder="Email" required>
+        <input type="password" id="password" placeholder="Password" required>
+        <div class="remember-me">
+            <input type="checkbox" id="rememberMe">
+            <label for="rememberMe">Remember me</label>
+        </div>
+        <button type="submit" class="btn">Login</button>
     </form>
 
-  </div>
+    <a href="#" id="forgotLink" class="forgot-password">Forgot your password?</a>
+    <div id="successMsg" class="success-msg"></div>
+</div>
 
-  <script>
-    // Safe initialization
-    window.addEventListener('load', () => {
-      const client = supabase.createClient(
-        'https://bwfwnpdjeovqeznwbckx.supabase.co',
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3ZnducGRqZW92cWV6bndiY2t4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxOTI2NzIsImV4cCI6MjA5MTc2ODY3Mn0.QohjsfSgvw64ZwSLRCtr_4rh49JyInEmrpDdzrXISQU'
-      );
+<script>
+// Use a different variable name to avoid conflict with global 'supabase'
+const supabaseClient = supabase.createClient(
+    'https://bwfwnpdjeovqeznwbckx.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3ZnducGRqZW92cWV6bndiY2t4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxOTI2NzIsImV4cCI6MjA5MTc2ODY3Mn0.QohjsfSgvw64ZwSLRCtr_4rh49JyInEmrpDdzrXISQU'
+);
 
-      console.log("✅ Supabase client initialized");
+const loginForm = document.getElementById('loginForm');
+const forgotLink = document.getElementById('forgotLink');
+const successMsg = document.getElementById('successMsg');
 
-      document.getElementById('loginForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
+// Login handler
+loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
 
-        const email = document.getElementById('email').value.trim();
-        const password = document.getElementById('password').value;
-        const rememberMe = document.getElementById('rememberMe').checked;
-
-        console.log("🔄 Attempting login for:", email);
-
-        try {
-          const { data, error } = await client.auth.signInWithPassword({
+    try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
             email: email,
             password: password
-          });
+        });
 
-          if (error) {
-            console.error("❌ Login error:", error);
+        if (error) {
             alert("Login failed: " + error.message);
-          } else {
+        } else {
             console.log("✅ Login successful!", data.user);
             window.location.href = '../dashboard.html';
-          }
-        } catch (err) {
-          console.error("🚨 Unexpected error:", err);
-          alert("An unexpected error occurred. Please try again.");
         }
-      });
-    });
-  </script>
+    } catch (err) {
+        console.error(err);
+        alert("An unexpected error occurred.");
+    }
+});
+
+// Forgot Password Handler
+forgotLink.addEventListener('click', async (e) => {
+    e.preventDefault();
+
+    const emailInput = document.getElementById('email').value.trim();
+    if (!emailInput) {
+        alert("Please enter your email address first.");
+        return;
+    }
+    if (!emailInput.includes('@')) {
+        alert("Please enter a valid email address.");
+        return;
+    }
+
+    try {
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(emailInput, {
+            redirectTo: 'http://localhost:5050/auth/update-password.html'
+        });
+
+        if (error) {
+            alert("Error: " + error.message);
+        } else {
+            successMsg.textContent = "✅ Password reset link sent! Check your email (including spam folder).";
+            successMsg.style.display = 'block';
+
+            setTimeout(() => {
+                successMsg.style.display = 'none';
+            }, 8000);
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Something went wrong. Please try again.");
+    }
+});
+</script>
 </body>
 </html>

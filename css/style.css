@@ -567,3 +567,19 @@ td {
 .schedule-list .shift-item.vacation {
     border-left-color: #FF4D4D;
 }
+.close-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: none;
+    border: none;
+    font-size: 1.8rem;
+    color: #ccc;
+    cursor: pointer;
+    padding: 5px;
+    transition: color 0.2s;
+}
+
+.close-btn:hover {
+    color: white;
+}

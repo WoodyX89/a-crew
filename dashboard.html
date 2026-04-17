@@ -1,43 +1,92 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>A Crew</title>
-  <link rel="stylesheet" href="css/style.css">
-  <!-- Favicon -->
-<link rel="icon" href="favicon.png" type="image/png">
-<link rel="shortcut icon" href="favicon.png" type="image/png">
-<link rel="apple-touch-icon" href="favicon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
-<link rel="icon" type="image/png" sizes="16x16" href="favicon.png">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#00C7B2">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="/assets/logo.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Crew Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#00C7B2">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+    <!-- Navbar -->
+    <div id="navbar-placeholder"></div>
 
-<!-- Reusable Navbar -->
-<div id="navbar-placeholder"></div>
+    <div class="main-content" style="max-width: 680px; margin: 0 auto; padding: 20px;">
+        
+        <!-- Create Post Box -->
+        <div class="card" style="margin-bottom: 25px;">
+            <h2 style="margin-top:0;">What's happening in the crew?</h2>
+            <textarea id="postContent" rows="3" placeholder="Share an update with the crew..."
+                style="width:100%; padding:14px; border-radius:12px; border:1px solid rgba(0,199,178,0.3); background:rgba(255,255,255,0.08); color:white; resize:vertical; font-size:1.05rem;"></textarea>
+            
+            <!-- Image Upload -->
+            <input type="file" id="imageUpload" accept="image/*" multiple style="margin:12px 0 8px;">
+            <div id="imagePreview" class="image-preview" style="display:flex; gap:10px; flex-wrap:wrap; margin:8px 0;"></div>
 
-  <!-- Dashboard Content -->
-  <div class="main-content">
-    <h1 class="welcome">Welcome, <span id="fullName">Crew Member</span>!</h1>
-    <p style="font-size: 1.2rem; opacity: 0.85; margin-bottom: 2rem;">
-      You're now in the secure A Crew dashboard. Yea budddyyyyy
-    </p>
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:10px;">
+    <button onclick="createTextPost()" class="btn" style="flex:1; padding:12px; font-weight:600;">
+        <i class="fas fa-paper-plane"></i> Post Update
+    </button>
+    
+    <button onclick="showPollModal()" class="btn" 
+            style="flex:1; padding:12px; font-weight:600; background:#00b894; color:white;">
+        <i class="fas fa-poll-h"></i> Create Poll
+    </button>
+    
+    <button onclick="showEventModal()" class="btn" 
+            style="flex:1; padding:12px; font-weight:600; background:#e67e22; color:white;">
+        <i class="fas fa-calendar-alt"></i> Schedule Event
+    </button>
+</div>
+        </div>
 
-    <div class="card">
-      <h2 style="color: #00C7B2;">Your Crew Hub</h2>
-      <p>This area is protected. Only authenticated members can access it.</p>
+        <!-- Live Feed -->
+<h2 style="margin: 25px 0 15px;"><i class="fas fa-stream"></i> Live Crew Feed</h2>
+
+<div style="margin-bottom: 15px;">
+    <label>Sort feed: </label>
+    <select id="sortSelect" onchange="changeSort()">
+        <option value="latest">Latest (Newest first)</option>
+        <option value="oldest">Oldest first</option>
+        <option value="popular">Most Popular</option>
+    </select>
+</div>
+
+<div id="feedContainer"></div>
+        
     </div>
-  </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/app.js"></script>
+    <!-- Poll Modal -->
+    <div id="pollModal" class="modal" style="display:none;">
+        <div class="card" style="max-width:420px; width:90%;">
+            <h3>Create a Poll</h3>
+            <input id="pollQuestion" placeholder="Ask the crew..." style="width:100%; padding:12px; margin:10px 0;">
+            <div id="pollOptionsContainer">
+                <input class="pollOption" placeholder="Option 1" style="width:100%; padding:10px; margin:5px 0;">
+                <input class="pollOption" placeholder="Option 2" style="width:100%; padding:10px; margin:5px 0;">
+            </div>
+            <button onclick="addPollOption()" style="margin:10px 0 15px;">+ Add Option</button><br>
+            <button onclick="createPoll()" class="btn">Post Poll</button>
+            <button onclick="hidePollModal()" style="background:none; border:none; color:#ccc; margin-left:15px;">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Event Modal -->
+    <div id="eventModal" class="modal" style="display:none;">
+        <div class="card" style="max-width:420px; width:90%;">
+            <h3>Schedule Event</h3>
+            <input id="eventTitle" placeholder="Event Title" style="width:100%; padding:12px; margin:8px 0;">
+            <input id="eventDate" type="datetime-local" style="width:100%; padding:12px; margin:8px 0;">
+            <input id="eventLocation" placeholder="Location (optional)" style="width:100%; padding:12px; margin:8px 0;">
+            <textarea id="eventDesc" placeholder="Description" rows="3" style="width:100%; padding:12px; margin:8px 0;"></textarea>
+            <button onclick="createEvent()" class="btn">Post Event</button>
+            <button onclick="hideEventModal()" style="background:none; border:none; color:#ccc; margin-left:15px;">Cancel</button>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
 </body>
 </html>

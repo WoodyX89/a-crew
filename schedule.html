@@ -1,33 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>A Crew</title>
-  <link rel="stylesheet" href="css/style.css">
-  <!-- Favicon -->
-<link rel="icon" href="favicon.png" type="image/png">
-<link rel="shortcut icon" href="favicon.png" type="image/png">
-<link rel="apple-touch-icon" href="favicon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
-<link rel="icon" type="image/png" sizes="16x16" href="favicon.png">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crew Schedule</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-
-<!-- Reusable Navbar -->
+<!-- Navbar -->
 <div id="navbar-placeholder"></div>
 
-  <!-- Dashboard Content -->
 <div class="main-content">
-    <h1 class="welcome">Welcome, <span id="fullName">Crew Member</span>!</h1>
-    
-    <h2 style="color: #00C7B2; margin: 2rem 0 1rem;">Crew Schedule Calendar</h2>
-    
-    <!-- Calendar Container -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h1 style="color: #00C7B2; margin: 0;">Crew Schedule</h1>
+        <div id="totalWorking" style="background: rgba(0,199,178,0.15); padding: 8px 16px; border-radius: 20px; font-weight: 600; color: #00C7B2;">
+            Total Working: <span id="workingCount">0</span>
+        </div>
+    </div>
+
+    <!-- Calendar -->
     <div class="calendar-container">
-        <!-- Header -->
         <div class="calendar-header">
             <button id="prevMonth" class="nav-btn"><i class="fas fa-chevron-left"></i></button>
             <div id="monthYear" class="month-year"></div>
@@ -35,25 +29,51 @@
             <button id="todayBtn" class="today-btn">Today</button>
         </div>
 
-        <!-- Weekday Headers -->
         <div class="weekdays">
             <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div>
             <div>Thu</div><div>Fri</div><div>Sat</div>
         </div>
 
-        <!-- Calendar Grid -->
         <div id="calendarGrid" class="calendar-grid"></div>
     </div>
 
-    <!-- Day Details Sidebar -->
+    <!-- Day Details -->
     <div id="dayDetails" class="day-details">
         <button id="closeDetails" class="close-btn">✕</button>
         <h3 id="selectedDate"></h3>
+
+        <!-- Add Shift Form -->
+        <div style="margin: 20px 0; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px;">
+            <h4>Add Shift</h4>
+            <select id="shiftMember" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;"></select>
+            <select id="shiftArea" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;">
+                <option value="">Select Area...</option>
+                <option value="Pretreat">Pretreat</option>
+                <option value="Demin">Demin</option>
+                <option value="Field 1">Field 1</option>
+                <option value="Field 2">Field 2</option>
+                <option value="Comp 1">Comp 1</option>
+                <option value="Comp 2">Comp 2</option>
+                <option value="Panel 1">Panel 1</option>
+                <option value="Panel 2">Panel 2</option>
+                <option value="LH">LH</option>
+                <option value="SS">SS</option>
+                <option value="FT">FT</option>
+            </select>
+            <select id="shiftStatus" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;">
+                <option value="working">Working</option>
+                <option value="vacation">On Vacation</option>
+            </select>
+            <button onclick="addShift()" style="width:100%; padding:12px; margin-top:12px; background:#00C7B2; color:white; border:none; border-radius:10px; font-weight:600;">
+                Add to Schedule
+            </button>
+        </div>
+
+        <h4>Shifts for this day</h4>
         <div id="scheduleList" class="schedule-list"></div>
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
