@@ -59,20 +59,35 @@
         
     </div>
 
-    <!-- Poll Modal -->
-    <div id="pollModal" class="modal" style="display:none;">
-        <div class="card" style="max-width:420px; width:90%;">
-            <h3>Create a Poll</h3>
-            <input id="pollQuestion" placeholder="Ask the crew..." style="width:100%; padding:12px; margin:10px 0;">
-            <div id="pollOptionsContainer">
-                <input class="pollOption" placeholder="Option 1" style="width:100%; padding:10px; margin:5px 0;">
-                <input class="pollOption" placeholder="Option 2" style="width:100%; padding:10px; margin:5px 0;">
-            </div>
-            <button onclick="addPollOption()" style="margin:10px 0 15px;">+ Add Option</button><br>
-            <button onclick="createPoll()" class="btn">Post Poll</button>
-            <button onclick="hidePollModal()" style="background:none; border:none; color:#ccc; margin-left:15px;">Cancel</button>
-        </div>
+<!-- Create Poll Modal -->
+<div id="pollModal" class="modal" style="display: none;">
+  <div class="modal-content poll-modal-content">
+    <div class="modal-header">
+      <h2>Create a Poll</h2>
+      <button id="closePollModal" class="close-btn">&times;</button>
     </div>
+    
+    <div class="poll-form">
+      <div class="form-group">
+        <label>Poll Question</label>
+        <textarea id="pollQuestion" rows="2" placeholder="Ask the crew something..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Poll Options</label>
+        <div id="pollOptionsContainer"></div>
+        <button type="button" id="addPollOptionBtn" class="add-option-btn">
+          + Add another option
+        </button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button id="cancelPollBtn" class="cancel-btn">Cancel</button>
+      <button id="createPollBtn" class="create-btn">Create Poll</button>
+    </div>
+  </div>
+</div>
 
     <!-- Event Modal -->
     <div id="eventModal" class="modal" style="display:none;">

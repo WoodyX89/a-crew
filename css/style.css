@@ -609,3 +609,347 @@ td {
   50% { transform: scale(1.6); }
   100% { transform: scale(1); }
 }
+
+/* Sleek & Bigger Edit / Delete Buttons */
+.edit-btn,
+.delete-btn {
+  padding: 10px 16px;
+  margin: 0 4px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 70px;
+}
+
+/* Edit Button - Nice teal/green theme */
+.edit-btn {
+  background-color: #00C7B2;     /* Your brand color */
+  color: white;
+}
+
+.edit-btn:hover {
+  background-color: #00a895;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 199, 178, 0.3);
+}
+
+/* Delete Button - Clean red */
+.delete-btn {
+  background-color: #ef4444;
+  color: white;
+}
+
+.delete-btn:hover {
+  background-color: #dc2626;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* Make them even nicer on mobile */
+@media (max-width: 768px) {
+  .edit-btn,
+  .delete-btn {
+    padding: 12px 18px;
+    font-size: 15px;
+    min-width: 80px;
+  }
+}
+/* ==================== IMPROVED COMMENT BOX ==================== */
+.comment-box {
+  background: #f8fafc;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0 16px 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.comment-box input[type="text"] {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 15px;
+  border: 2px solid #d1d5db;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  transition: all 0.2s ease;
+}
+
+.comment-box input[type="text"]:focus {
+  outline: none;
+  border-color: #00C7B2;
+  box-shadow: 0 0 0 3px rgba(0, 199, 178, 0.1);
+}
+
+.comment-box button {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-right: 8px;
+  transition: all 0.2s ease;
+}
+
+.comment-box button:first-child {
+  background: #00C7B2;
+  color: white;
+}
+
+.comment-box button:first-child:hover {
+  background: #00a895;
+  transform: translateY(-1px);
+}
+
+.comment-box button:last-child {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.comment-box button:last-child:hover {
+  background: #d1d5db;
+}
+
+/* ==================== BLENDED POLL STYLING - UPDATED ==================== */
+.poll {
+  background: transparent;
+  border: none;
+  padding: 16px 0 20px 0;
+  margin: 12px 0 24px 0;
+}
+
+.poll strong {
+  font-size: 19px;           /* Bigger title */
+  font-weight: 700;
+  color: #ffffff;            /* White font */
+  display: block;
+  margin-bottom: 16px;
+  line-height: 1.3;
+}
+
+/* Optional: Add a subtle dark overlay if the background is light */
+.poll strong {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);   /* Helps white text stand out */
+}
+
+.poll-total {
+  font-size: 14px;
+  color: #d1d5db;
+  margin-bottom: 18px;
+}
+
+/* Poll Option */
+.poll-option {
+  background: #f8fafc;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.poll-option:hover:not(.voted) {
+  border-color: #00C7B2;
+  background: #f1f5f9;
+  transform: translateY(-1px);
+}
+
+.poll-option.voted {
+  border-color: #00C7B2;
+  background: #ecfdf5;
+}
+
+.poll-option-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.poll-text {
+  font-weight: 500;
+  font-size: 15.5px;
+  color: #1f2937;
+}
+
+.your-vote {
+  font-size: 13px;
+  color: #00C7B2;
+  font-weight: 600;
+}
+
+.progress-container {
+  height: 9px;
+  background: #e5e7eb;
+  border-radius: 9999px;
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #00C7B2, #14b8a6);
+  border-radius: 9999px;
+  transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.poll-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14.5px;
+  color: #4b5563;
+}
+
+.poll-percentage {
+  font-weight: 700;
+  color: #00C7B2;
+}
+
+.poll-option.voted {
+  cursor: default;
+}
+
+.poll-option.voted:hover {
+  transform: none;
+}
+
+/* ==================== DARK MODE POLL MODAL ==================== */
+.poll-modal-content {
+  max-width: 540px;
+  width: 92%;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+  background: #1f2937;
+}
+
+.poll-modal-content .modal-header {
+  background: #111827;           /* Very dark header */
+  color: #ffffff;
+  padding: 24px 26px;
+  border-bottom: 1px solid #374151;
+}
+
+.poll-modal-content .modal-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+/* Main form area - Dark background */
+.poll-form {
+  padding: 28px 26px;
+  background: #1f2937;
+  color: #e5e7eb;
+}
+
+.poll-form .form-group {
+  margin-bottom: 26px;
+}
+
+.poll-form label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #d1d5db;
+  font-size: 16px;
+}
+
+.poll-form textarea {
+  width: 100%;
+  padding: 16px;
+  background: #374151;
+  border: 2px solid #4b5563;
+  border-radius: 12px;
+  font-size: 16.5px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 92px;
+  color: #f3f4f6;
+}
+
+.poll-form textarea:focus {
+  border-color: #00C7B2;
+  box-shadow: 0 0 0 4px rgba(0, 199, 178, 0.2);
+  outline: none;
+}
+
+/* Poll Options Inputs */
+#pollOptionsContainer input {
+  width: 100%;
+  padding: 15px 16px;
+  margin-bottom: 12px;
+  background: #374151;
+  border: 2px solid #4b5563;
+  border-radius: 10px;
+  font-size: 16px;
+  color: #f3f4f6;
+}
+
+#pollOptionsContainer input:focus {
+  border-color: #00C7B2;
+  box-shadow: 0 0 0 3px rgba(0, 199, 178, 0.2);
+}
+
+.add-option-btn {
+  background: #374151;
+  color: #d1d5db;
+  border: 2px solid #4b5563;
+  padding: 13px 24px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.add-option-btn:hover {
+  background: #4b5563;
+  border-color: #00C7B2;
+}
+
+/* Action Buttons */
+.modal-actions {
+  padding: 24px 26px;
+  background: #111827;
+  display: flex;
+  gap: 14px;
+  justify-content: flex-end;
+  border-top: 1px solid #374151;
+}
+
+.cancel-btn, .create-btn {
+  padding: 16px 32px;
+  font-size: 16.5px;
+  font-weight: 600;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.cancel-btn {
+  background: #374151;
+  color: #d1d5db;
+}
+
+.cancel-btn:hover {
+  background: #4b5563;
+  color: white;
+}
+
+.create-btn {
+  background: #00C7B2;
+  color: white;
+  min-width: 160px;
+}
+
+.create-btn:hover {
+  background: #00b39f;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 199, 178, 0.4);
+}

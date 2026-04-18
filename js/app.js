@@ -87,18 +87,41 @@ function renderPost(post) {
   // ================================================================
 
   if (post.post_type === 'poll' && Array.isArray(post.poll_options)) {
-    html += `<div class="poll"><strong>${post.content || 'Poll Question'}</strong>`;
-    const totalVotes = Object.values(post.poll_votes || {}).reduce((a, b) => a + b, 0);
-    post.poll_options.forEach((option) => {
-      const votes = (post.poll_votes && post.poll_votes[option]) || 0;
-      const percentage = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
-      html += `
-        <div class="poll-option" onclick="voteOnPoll('${post.id}', '${option}')">
-          ${option} <span class="poll-votes">${votes} votes (${percentage}%)</span>
-        </div>`;
-    });
-    html += `</div>`;
-  }
+  const totalVotes = Object.values(post.poll_votes || {}).reduce((a, b) => a + b, 0);
+  const hasVoted = post.user_votes && post.user_votes[currentUser?.id];
+
+  html += `
+  <div class="poll">
+    <strong>${post.content || 'Poll Question'}</strong>
+    <div class="poll-total">Total votes: ${totalVotes}</div>`;
+
+  post.poll_options.forEach((option) => {
+    const votes = (post.poll_votes && post.poll_votes[option]) || 0;
+    const percentage = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+    const isSelected = hasVoted === option;
+
+    html += `
+      <div class="poll-option ${isSelected ? 'voted' : ''}" 
+           onclick="${!hasVoted ? `voteOnPoll('${post.id}', '${option}')` : ''}">
+        
+        <div class="poll-option-header">
+          <span class="poll-text">${option}</span>
+          ${isSelected ? `<span class="your-vote">✓ Your vote</span>` : ''}
+        </div>
+        
+        <div class="progress-container">
+          <div class="progress-bar" style="width: ${percentage}%"></div>
+        </div>
+        
+        <div class="poll-stats">
+          <span class="poll-percentage">${percentage}%</span>
+          <span class="poll-votes">${votes} votes</span>
+        </div>
+      </div>`;
+  });
+
+  html += `</div>`;
+}
 
   if (post.post_type === 'event' && post.event_title) {
     html += `
@@ -119,11 +142,16 @@ function renderPost(post) {
         💬 Comment
       </button>
     </div>
-    <div id="comment-box-${postId}" class="comment-box" style="display:none;">
-      <input type="text" id="comment-input-${postId}" placeholder="Write a comment...">
-      <button onclick="addComment('${postId}')">Post</button>
+<div id="comment-box-${postId}" class="comment-box" style="display:none;">
+      <input type="text" 
+        id="comment-input-${postId}" 
+        placeholder="Write a comment...">
+  
+    <div style="display: flex; gap: 10px;">
+      <button onclick="addComment('${postId}')">Post Comment</button>
       <button onclick="toggleCommentBox('${postId}')">Cancel</button>
     </div>
+</div>
     <div id="comments-${postId}" class="comments"></div>
   `;
 
@@ -171,26 +199,29 @@ async function loadMembers() {
   if (!tbody && !listContainer) return;
 
   const { data, error } = await supabaseClient
-    .from('members')
-    .select('*')
-    .order('joined_date', { ascending: false });
+      .from('members')
+      .select('*')
+      .order('joined_date', { ascending: false });
+
+  if (error) {
+    console.error(error);
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7">Error loading members</td></tr>`;
+    if (listContainer) listContainer.innerHTML = `<p>Error loading members</p>`;
+    return;
+  }
 
   if (tbody) tbody.innerHTML = '';
   if (listContainer) listContainer.innerHTML = '';
 
-  if (error) {
-    console.error(error);
-    if (tbody) tbody.innerHTML = `Error loading members`;
-    return;
-  }
   if (!data || data.length === 0) {
-    if (tbody) tbody.innerHTML = `No members found yet.`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7">No members found yet.</td></tr>`;
     if (listContainer) listContainer.innerHTML = `<p>No members found yet.</p>`;
     return;
   }
 
-  data.forEach(member => {
-    if (tbody) {
+  // Render Desktop Table
+  if (tbody) {
+    data.forEach(member => {
       const row = document.createElement('tr');
       row.innerHTML = `
         <td>${member.full_name || 'N/A'}</td>
@@ -204,9 +235,10 @@ async function loadMembers() {
           <button class="delete-btn" data-id="${member.id}">Delete</button>
         </td>`;
       tbody.appendChild(row);
-    }
-  });
+    });
+  }
 
+  // Render Mobile Cards
   if (listContainer) {
     data.forEach(member => {
       const card = document.createElement('div');
@@ -223,18 +255,33 @@ async function loadMembers() {
       listContainer.appendChild(card);
     });
   }
-  addActionListeners();
+
+  // IMPORTANT: Call this AFTER the buttons are added to the DOM
+  setTimeout(addActionListeners, 10);   // Small delay ensures DOM is updated
 }
 
 
 
 function addActionListeners() {
-  document.querySelectorAll('.edit-btn').forEach(btn => 
-    btn.addEventListener('click', () => editMember(btn.dataset.id))
-  );
-  document.querySelectorAll('.delete-btn').forEach(btn => 
-    btn.addEventListener('click', () => deleteMember(btn.dataset.id))
-  );
+  document.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.removeEventListener('click', handleEditClick);
+    btn.addEventListener('click', handleEditClick);
+  });
+
+  document.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.removeEventListener('click', handleDeleteClick);
+    btn.addEventListener('click', handleDeleteClick);
+  });
+}
+
+function handleEditClick(e) {
+  const id = e.currentTarget.dataset.id;
+  if (id) editMember(id);
+}
+
+function handleDeleteClick(e) {
+  const id = e.currentTarget.dataset.id;
+  if (id) deleteMember(id);
 }
 
 
@@ -280,10 +327,10 @@ async function toggleLike(postId) {
 
 async function loadCommentsForPost(postId) {
   const { data, error } = await supabaseClient
-    .from('comments')
-    .select('*')
-    .eq('post_id', postId)
-    .order('created_at', { ascending: true });
+      .from('comments')
+      .select('*')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true });
 
   if (error) return console.error(error);
 
@@ -291,9 +338,15 @@ async function loadCommentsForPost(postId) {
   if (!container) return;
 
   container.innerHTML = data.length === 0 ? `<p>No comments yet.</p>` : '';
+
   data.forEach(comment => {
     const div = document.createElement('div');
-    div.innerHTML = `<strong>${comment.full_name}</strong> <small>${new Date(comment.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</small><br>${comment.content}`;
+    div.className = 'comment';
+    div.innerHTML = `
+      <strong>${comment.full_name || 'Crew Member'}</strong> 
+      <small>${new Date(comment.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</small>
+      <br>${comment.content}
+    `;
     container.appendChild(div);
   });
 }
@@ -319,18 +372,35 @@ async function voteOnPoll(postId, option) {
 async function addComment(postId) {
   const input = document.getElementById(`comment-input-${postId}`);
   const content = input.value.trim();
-  if (!content || !currentUser) return;
+
+  if (!content || !currentUser) {
+    return alert("You must be logged in to comment.");
+  }
+
+  // Get the member's full name from the members table
+  const { data: member, error: memberError } = await supabaseClient
+    .from('members')
+    .select('full_name')
+    .eq('id', currentUser.id)
+    .single();
+
+  const displayName = member?.full_name && member.full_name.trim() !== '' 
+                    ? member.full_name 
+                    : (currentUser.email ? currentUser.email.split('@')[0] : 'Crew Member');
 
   const { error } = await supabaseClient.from('comments').insert({
     post_id: postId,
     user_id: currentUser.id,
-    full_name: currentUser.email ? currentUser.email.split('@')[0] : 'Crew Member',
+    full_name: displayName,           // ← Now uses full name
     content: content
   });
 
   if (!error) {
     input.value = '';
     loadCommentsForPost(postId);
+  } else {
+    console.error(error);
+    alert("Failed to post comment: " + error.message);
   }
 }
 
@@ -339,27 +409,37 @@ function toggleCommentBox(postId) {
   box.style.display = box.style.display === 'none' ? 'block' : 'none';
 }
 
-// ====================== OTHER FUNCTIONS (unchanged) ======================
+//////////////POLL MODAL FUNCTIONS ///////////////////////
+
 function showPollModal() {
   pollOptions = ["", ""];
-  document.getElementById('pollModal').style.display = 'flex';
+  const modal = document.getElementById('pollModal');
+  if (modal) modal.style.display = 'flex';
+  
+  document.getElementById('pollQuestion').value = '';
   renderPollOptions();
+  document.getElementById('pollQuestion').focus();
 }
 
 function hidePollModal() {
-  document.getElementById('pollModal').style.display = 'none';
+  const modal = document.getElementById('pollModal');
+  if (modal) modal.style.display = 'none';
 }
 
 function renderPollOptions() {
   const container = document.getElementById('pollOptionsContainer');
+  if (!container) return;
+  
   container.innerHTML = '';
   pollOptions.forEach((option, index) => {
     const input = document.createElement('input');
     input.type = 'text';
-    input.className = 'pollOption';
+    input.className = 'poll-option-input';
     input.placeholder = `Option ${index + 1}`;
     input.value = option;
-    input.addEventListener('input', () => { pollOptions[index] = input.value.trim(); });
+    input.addEventListener('input', () => {
+      pollOptions[index] = input.value.trim();
+    });
     container.appendChild(input);
   });
 }
@@ -371,8 +451,10 @@ function addPollOption() {
 
 async function createPoll() {
   if (!currentUser) return alert("You must be logged in.");
+
   const question = document.getElementById('pollQuestion').value.trim();
   const validOptions = pollOptions.filter(opt => opt.length > 0);
+
   if (!question) return alert("Please enter a poll question.");
   if (validOptions.length < 2) return alert("Please add at least 2 options.");
 
@@ -386,14 +468,16 @@ async function createPoll() {
     likes: 0
   });
 
-  if (error) alert("Failed to create poll: " + error.message);
-  else {
+  if (error) {
+    alert("Failed to create poll: " + error.message);
+  } else {
     hidePollModal();
-    document.getElementById('pollQuestion').value = '';
     alert("✅ Poll posted successfully!");
     loadFeed(currentSort);
   }
 }
+///////////////////////////////////
+
 
 function showEventModal() {
   document.getElementById('eventModal').style.display = 'flex';
@@ -464,28 +548,68 @@ function openMemberModal(member = null) {
 
 async function saveMember(e) {
   e.preventDefault();
+
+  if (!currentUser) {
+    return alert("You must be logged in to manage members.");
+  }
+
+  const fullName = document.getElementById('fullName').value.trim();
+  const email = document.getElementById('email').value.trim();
+
+  if (!fullName || !email) {
+    return alert("Full name and email are required.");
+  }
+
   const memberData = {
-    full_name: document.getElementById('fullName').value.trim(),
-    email: document.getElementById('email').value.trim(),
-    phone: document.getElementById('phone').value.trim(),
+    full_name: fullName,
+    email: email,
+    phone: document.getElementById('phone').value.trim() || null,
     role: document.getElementById('role').value,
     status: document.getElementById('status').value,
-    joined_date: currentEditingId ? undefined : new Date().toISOString()
+    updated_at: new Date().toISOString()
   };
 
   let error;
+
   if (currentEditingId) {
-    ({ error } = await supabaseClient.from('members').update(memberData).eq('id', currentEditingId));
-  } else {
-    ({ error } = await supabaseClient.from('members').insert([memberData]));
+    // UPDATE
+    ({ error } = await supabaseClient
+      .from('members')
+      .update(memberData)
+      .eq('id', currentEditingId));
+
+    if (!error) alert("✅ Member updated successfully!");
+  } 
+  else {
+    // INSERT NEW MEMBER
+    memberData.id = crypto.randomUUID();     // Generate new UUID
+
+    // Optional: prevent duplicate emails
+    const { data: existing } = await supabaseClient
+      .from('members')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existing) {
+      return alert(`A member with email "${email}" already exists.`);
+    }
+
+    ({ error } = await supabaseClient
+      .from('members')
+      .insert([memberData]));
+
+    if (!error) alert("✅ Member added successfully!");
   }
 
   if (error) {
+    console.error("Save error:", error);
     alert('Error saving member: ' + error.message);
     return;
   }
+
   document.getElementById('memberModal').classList.remove('active');
-  loadMembers();
+  await loadMembers();
 }
 
 async function deleteMember(id) {
@@ -506,17 +630,31 @@ async function logout() {
   window.location.href = 'auth/login.html';
 }
 
+// Replace your current loadUser() with this:
 async function loadUser() {
   try {
-    const { data: { user } } = await supabaseClient.auth.getUser();
+    const { data: { user }, error } = await supabaseClient.auth.getUser();
+    
+    if (error) {
+      console.error("Auth error:", error);
+      currentUser = null;
+      return;
+    }
+
     currentUser = user;
-    if (user && document.getElementById('fullName')) {
-      document.getElementById('fullName').textContent = user.email ? user.email.split('@')[0] : "Crew Member";
+    console.log("Current user loaded:", currentUser?.email); // Helpful for debugging
+
+    // Update any UI that shows user name if needed
+    const nameEl = document.getElementById('fullName'); // or whatever displays user name
+    if (nameEl && user) {
+      nameEl.textContent = user.email ? user.email.split('@')[0] : "Crew Member";
     }
   } catch (err) {
     console.error("Error loading user:", err);
+    currentUser = null;
   }
 }
+
 function setupImagePreview() {
     const imageInput = document.getElementById('imageUpload');
     const previewContainer = document.getElementById('imagePreview');
@@ -786,25 +924,60 @@ function isSameDayInMountainTime(dateStr) {
 // ====================== MAIN INITIALIZATION ======================
 document.addEventListener('DOMContentLoaded', async () => {
   fetch('navbar.html')
-    .then(response => response.text())
-    .then(data => {
-      const placeholder = document.getElementById('navbar-placeholder');
-      if (placeholder) placeholder.innerHTML = data;
-      setTimeout(initMobileMenu, 100);
-    })
-    .catch(err => console.error('Error loading navbar:', err));
+      .then(response => response.text())
+      .then(data => {
+        const placeholder = document.getElementById('navbar-placeholder');
+        if (placeholder) placeholder.innerHTML = data;
+        setTimeout(initMobileMenu, 100);
+      })
+      .catch(err => console.error('Error loading navbar:', err));
 
+  // ====================== MEMBERS PAGE SETUP ======================
   if (document.getElementById('membersBody') || document.getElementById('membersList')) {
+    await loadUser();
+
+    if (!currentUser) {
+      alert("Please log in to manage members.");
+      return;
+    }
+
     loadMembers();
+
+    const addMemberBtn = document.getElementById('addMemberBtn');
+    if (addMemberBtn) addMemberBtn.addEventListener('click', () => openMemberModal());
+
+    const closeModalBtn = document.getElementById('closeModal');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const memberForm = document.getElementById('memberForm');
+
+    if (closeModalBtn) closeModalBtn.addEventListener('click', () => document.getElementById('memberModal').classList.remove('active'));
+    if (cancelBtn) cancelBtn.addEventListener('click', () => document.getElementById('memberModal').classList.remove('active'));
+    if (memberForm) memberForm.addEventListener('submit', saveMember);
   }
 
+  // ====================== FEED PAGE SETUP ======================
   if (document.getElementById('feedContainer')) {
-  await loadUser();
-  setupImagePreview();
-  await loadFeed('latest');
-  subscribeToFeed();        // ← This line was causing the error
-}
+    await loadUser();
+    setupImagePreview();
+    await loadFeed('latest');
+    subscribeToFeed();
 
+    // === POLL MODAL LISTENERS - MOVED HERE ===
+    const pollModal = document.getElementById('pollModal');
+    if (pollModal) {
+      const closePollModal = document.getElementById('closePollModal');
+      const cancelPollBtn = document.getElementById('cancelPollBtn');
+      const createPollBtn = document.getElementById('createPollBtn');
+      const addPollOptionBtn = document.getElementById('addPollOptionBtn');
+
+      if (closePollModal) closePollModal.addEventListener('click', hidePollModal);
+      if (cancelPollBtn) cancelPollBtn.addEventListener('click', hidePollModal);
+      if (createPollBtn) createPollBtn.addEventListener('click', createPoll);
+      if (addPollOptionBtn) addPollOptionBtn.addEventListener('click', addPollOption);
+    }
+  }
+
+  // ====================== CALENDAR PAGE SETUP ======================
   if (document.getElementById('calendarGrid')) {
     await loadSchedule();
     renderCalendar();
