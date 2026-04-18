@@ -3,41 +3,87 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>A Crew</title>
+  <title>A Crew - Golf Scramble</title>
   <link rel="stylesheet" href="css/style.css">
-  <!-- Favicon -->
-<link rel="icon" href="favicon.png" type="image/png">
-<link rel="shortcut icon" href="favicon.png" type="image/png">
-<link rel="apple-touch-icon" href="favicon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
-<link rel="icon" type="image/png" sizes="16x16" href="favicon.png">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#00C7B2">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="/assets/logo.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+  <div id="navbar-placeholder"></div>
 
-<!-- Reusable Navbar -->
-<div id="navbar-placeholder"></div>
-
-  <!-- Dashboard Content -->
   <div class="main-content">
-    <h1 class="welcome">Welcome, <span id="fullName">Crew Member</span>!</h1>
-    <p style="font-size: 1.2rem; opacity: 0.85; margin-bottom: 2rem;">
-      You're now in the secure A Crew dashboard.
-    </p>
+    <h1 class="welcome">Golf Scramble Leaderboard <i class="fas fa-golf-ball"></i></h1>
 
+    <div class="card" style="margin-bottom: 1.5rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <h2 style="margin:0; color:#00C7B2;">Live Standings</h2>
+        <div style="display:flex; gap:10px;">
+          <button onclick="showAddTeamModal()" class="add-team-btn">
+            <i class="fas fa-plus"></i> Add Team
+          </button>
+          <button onclick="refreshLeaderboard()" class="refresh-btn">
+            <i class="fas fa-sync-alt"></i> Refresh
+          </button>
+        </div>
+      </div>
+      <p id="last-updated" style="margin-top:8px; opacity:0.8; font-size:0.95rem;">Last updated: just now</p>
+    </div>
+
+    <!-- Mobile-friendly Leaderboard -->
     <div class="card">
-      <h2 style="color: #00C7B2;">Your Crew Hub</h2>
-      <p>This area is protected. Only authenticated members can access it.</p>
+      <div class="table-container">
+        <table class="leaderboard-table" id="leaderboardTable">
+          <thead>
+            <tr>
+              <th>Pos</th>
+              <th>Team</th>
+              <th>Score</th>
+              <th>Thru</th>
+              <th>To Par</th>
+              <th style="width:50px;"></th>
+            </tr>
+          </thead>
+          <tbody id="leaderboardBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/app.js"></script>
+  <!-- Add/Edit Team Modal -->
+  <div id="teamModal" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:480px; width:92%;">
+      <div class="modal-header">
+        <h2 id="modalTeamTitle">Add New Team</h2>
+        <button onclick="hideTeamModal()" class="close-btn">&times;</button>
+      </div>
+      <div style="padding:24px;">
+        <input type="hidden" id="teamId">
+        <div class="form-group">
+          <label>Team Name</label>
+          <input type="text" id="teamName" placeholder="e.g. The Mulligans">
+        </div>
+        <div class="form-group">
+          <label>Players (comma separated)</label>
+          <input type="text" id="teamPlayers" placeholder="Trevor Wood, Shawn Grant, Mike Chen">
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+          <div class="form-group">
+            <label>Score</label>
+            <input type="number" id="teamScore" value="0">
+          </div>
+          <div class="form-group">
+            <label>Thru</label>
+            <input type="text" id="teamThru" value="F" maxlength="3">
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button onclick="hideTeamModal()" class="cancel-btn">Cancel</button>
+        <button onclick="saveTeam()" class="create-btn">Save Team</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
 </body>
 </html>

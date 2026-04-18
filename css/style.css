@@ -953,3 +953,105 @@ td {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(0, 199, 178, 0.4);
 }
+
+/* ==================== GOLF SCRAMBLE LEADERBOARD ==================== */
+/* ==================== FIXED & MOBILE-FRIENDLY GOLF LEADERBOARD ==================== */
+.table-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+}
+
+.leaderboard-table {
+  width: 100%;
+  min-width: 560px;           /* Better minimum width for alignment */
+  border-collapse: collapse;
+  table-layout: fixed;        /* Important for consistent column widths */
+}
+
+.leaderboard-table th {
+  background: #1f2937;
+  color: #00C7B2;
+  padding: 16px 10px;
+  text-align: center;         /* Center all headers */
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.leaderboard-table td {
+  padding: 16px 10px;
+  border-bottom: 1px solid #374151;
+  vertical-align: middle;
+}
+
+/* Column Alignment Fixes */
+.leaderboard-table td:nth-child(1) {  /* Position */
+  width: 60px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 19px;
+  color: #00C7B2;
+}
+
+.leaderboard-table td:nth-child(2) {  /* Team Name */
+  width: auto;
+  font-weight: 600;
+  padding-left: 12px;
+}
+
+.leaderboard-table td:nth-child(3) {  /* Players */
+  color: #9ca3af;
+  font-size: 14.5px;
+}
+
+.leaderboard-table td:nth-child(4) {  /* Score */
+  width: 100px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 19px;
+  color: #00C7B2;
+}
+
+.leaderboard-table td:nth-child(5) {  /* Thru */
+  width: 80px;
+  text-align: center;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.leaderboard-table td:nth-child(6) {  /* To Par */
+  width: 100px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.leaderboard-table td:nth-child(7) {  /* Actions */
+  width: 60px;
+  text-align: center;
+}
+
+/* To Par Color Coding */
+.topar-under { color: #22c55e; }
+.topar-even  { color: #eab308; }
+.topar-over  { color: #ef4444; }
+
+/* Hover effect */
+.leaderboard-table tr:hover {
+  background: #1f2937;
+}
+
+/* Buttons */
+.add-team-btn, .refresh-btn {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.add-team-btn { background: #00C7B2; color: white; }
+.refresh-btn { background: #374151; color: white; }
