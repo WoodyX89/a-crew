@@ -953,104 +953,103 @@ td {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(0, 199, 178, 0.4);
 }
-
 /* ==================== GOLF SCRAMBLE LEADERBOARD ==================== */
-/* ==================== FIXED & MOBILE-FRIENDLY GOLF LEADERBOARD ==================== */
 .table-container {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  border-radius: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 12px;
+    background: #1f2937;
 }
 
 .leaderboard-table {
-  width: 100%;
-  min-width: 560px;           /* Better minimum width for alignment */
-  border-collapse: collapse;
-  table-layout: fixed;        /* Important for consistent column widths */
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;           /* This is key */
+    min-width: 620px;              /* Prevents columns from getting too squished */
+}
+
+.leaderboard-table th,
+.leaderboard-table td {
+    padding: 16px 8px;
+    text-align: center;
+    border-bottom: 1px solid #374151;
 }
 
 .leaderboard-table th {
-  background: #1f2937;
-  color: #00C7B2;
-  padding: 16px 10px;
-  text-align: center;         /* Center all headers */
-  font-weight: 600;
-  white-space: nowrap;
+    background: #1f2937;
+    color: #00C7B2;
+    font-weight: 600;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
-.leaderboard-table td {
-  padding: 16px 10px;
-  border-bottom: 1px solid #374151;
-  vertical-align: middle;
+/* Precise Column Widths */
+.leaderboard-table th:nth-child(1),   /* Pos */
+.leaderboard-table td:nth-child(1) {
+    width: 55px;
 }
 
-/* Column Alignment Fixes */
-.leaderboard-table td:nth-child(1) {  /* Position */
-  width: 60px;
-  text-align: center;
-  font-weight: 700;
-  font-size: 19px;
-  color: #00C7B2;
+.leaderboard-table th:nth-child(2),   /* Team */
+.leaderboard-table td:nth-child(2) {
+    width: 28%;
+    text-align: left;
+    padding-left: 16px;
 }
 
-.leaderboard-table td:nth-child(2) {  /* Team Name */
-  width: auto;
-  font-weight: 600;
-  padding-left: 12px;
+.leaderboard-table th:nth-child(3),   /* Players */
+.leaderboard-table td:nth-child(3) {
+    width: 32%;
+    text-align: left;
+    color: #9ca3af;
+    font-size: 14.5px;
 }
 
-.leaderboard-table td:nth-child(3) {  /* Players */
-  color: #9ca3af;
-  font-size: 14.5px;
+.leaderboard-table th:nth-child(4),   /* Score */
+.leaderboard-table td:nth-child(4) {
+    width: 85px;
+    font-weight: 700;
+    font-size: 19px;
+    color: #00C7B2;
 }
 
-.leaderboard-table td:nth-child(4) {  /* Score */
-  width: 100px;
-  text-align: center;
-  font-weight: 700;
-  font-size: 19px;
-  color: #00C7B2;
+.leaderboard-table th:nth-child(5),   /* Thru */
+.leaderboard-table td:nth-child(5) {
+    width: 70px;
 }
 
-.leaderboard-table td:nth-child(5) {  /* Thru */
-  width: 80px;
-  text-align: center;
-  color: #9ca3af;
-  font-weight: 500;
+.leaderboard-table th:nth-child(6),   /* To Par */
+.leaderboard-table td:nth-child(6) {
+    width: 95px;
+    font-weight: 700;
+    font-size: 18px;
 }
 
-.leaderboard-table td:nth-child(6) {  /* To Par */
-  width: 100px;
-  text-align: center;
-  font-weight: 700;
-  font-size: 18px;
+.leaderboard-table th:nth-child(7),   /* Actions */
+.leaderboard-table td:nth-child(7) {
+    width: 50px;
 }
 
-.leaderboard-table td:nth-child(7) {  /* Actions */
-  width: 60px;
-  text-align: center;
-}
+/* To Par Styling */
+.topar-under { color: #22c55e !important; }
+.topar-even  { color: #eab308 !important; }
+.topar-over  { color: #ef4444 !important; }
 
-/* To Par Color Coding */
-.topar-under { color: #22c55e; }
-.topar-even  { color: #eab308; }
-.topar-over  { color: #ef4444; }
-
-/* Hover effect */
 .leaderboard-table tr:hover {
-  background: #1f2937;
+    background: #252f3d;
 }
 
 /* Buttons */
 .add-team-btn, .refresh-btn {
-  padding: 12px 20px;
-  border: none;
-  border-radius: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .add-team-btn { background: #00C7B2; color: white; }

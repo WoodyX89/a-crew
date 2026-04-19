@@ -899,138 +899,108 @@ async function addShift() {
 }
 
 // ====================== GOLF SCRAMBLE LEADERBOARD ======================
+function subscribeToGolfLeaderboard() {
+    if (golfChannel) {
+        console.log("Golf channel already subscribed");
+        return;
+    }
+
+    golfChannel = supabaseClient.channel('golf-leaderboard')
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'golf_teams'
+        }, (payload) => {
+            console.log('Golf leaderboard changed via realtime:', payload.eventType);
+            loadGolfLeaderboard();
+        })
+        .subscribe((status) => {
+            console.log('Golf realtime subscription status:', status);
+        });
+}
+
+// ====================== GOLF SCRAMBLE LEADERBOARD ======================
 let golfChannel = null;
 let autoRefreshInterval = null;
 
 async function loadGolfLeaderboard() {
-  const tbody = document.getElementById('leaderboardBody');
-  if (!tbody) return;
-
-  tbody.innerHTML = `
-    <tr>
-      <td colspan="7" style="text-align:center; padding:40px; color:#00C7B2;">
-        <i class="fas fa-spinner fa-spin"></i> Loading leaderboard...
-      </td>
-    </tr>`;
-
-  const { data, error } = await supabaseClient
-    .from('golf_teams')
-    .select('*')
-    .order('score', { ascending: true });   // Best score (lowest number) first
-
-  if (error) {
-    console.error(error);
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#ef4444;">Error loading leaderboard</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = '';
-
-  if (data.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:60px;color:#9ca3af;">No teams added yet.<br><br>Click "Add Team" to get started.</td></tr>`;
-    return;
-  }
-
-  data.forEach((team, index) => {
-    const toPar = team.score || 0;
-    const toParText = toPar < 0 ? toPar : toPar === 0 ? 'E' : `+${toPar}`;
-    const toParClass = toPar < 0 ? 'topar-under' : toPar === 0 ? 'topar-even' : 'topar-over';
-
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td style="font-weight:700; font-size:19px; color:#00C7B2; text-align:center;">${index + 1}</td>
-      <td style="font-weight:600;">${team.team_name}</td>
-      <td style="color:#9ca3af; font-size:14.5px;">${team.players || '—'}</td>
-      <td style="text-align:center; font-weight:700; font-size:19px; color:#00C7B2;">${team.score}</td>
-      <td style="text-align:center;">${team.thru || 'F'}</td>
-      <td class="${toParClass}" style="text-align:center; font-weight:700; font-size:18px;">${toParText}</td>
-      <td style="text-align:center;">
-        <button onclick="editTeam('${team.id}')" style="background:none;border:none;color:#00C7B2;font-size:18px;cursor:pointer;padding:4px 8px;">
-          ✏️
-        </button>
-      </td>
-    `;
-    tbody.appendChild(row);
-  });
-
-  document.getElementById('last-updated').textContent = `Last updated: Just now`;
-}
-
-// Auto Refresh every 15 seconds
-function startAutoRefresh() {
-  // Clear any existing interval
-  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-  
-  autoRefreshInterval = setInterval(() => {
-    if (document.getElementById('leaderboardBody')) {
-      loadGolfLeaderboard();
+    const tbody = document.getElementById('leaderboardBody');
+    if (!tbody) {
+        console.error("❌ leaderboardBody not found in DOM");
+        return;
     }
-  }, 15000); // Refresh every 15 seconds
+
+    tbody.innerHTML = `
+        <tr>
+          <td colspan="7" style="text-align:center; padding:60px; color:#00C7B2;">
+            <i class="fas fa-spinner fa-spin"></i><br><br>Loading leaderboard...
+          </td>
+        </tr>`;
+
+    console.log("🔄 Starting loadGolfLeaderboard at", new Date().toLocaleTimeString());
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('golf_teams')
+            .select('*')
+            .order('score', { ascending: true });
+
+        console.log("📊 Supabase response:", { 
+            rows: data ? data.length : 0, 
+            firstRow: data && data.length > 0 ? data[0] : null,
+            error: error 
+        });
+
+        if (error) throw error;
+
+        tbody.innerHTML = '';
+
+        if (!data || data.length === 0) {
+            console.warn("⚠️ No teams returned");
+            tbody.innerHTML = `
+                <tr>
+                  <td colspan="7" style="text-align:center; padding:80px; color:#9ca3af;">
+                    No teams found.<br><br>
+                    <button onclick="showAddTeamModal()" class="add-team-btn">
+                        <i class="fas fa-plus"></i> Add First Team
+                    </button>
+                  </td>
+                </tr>`;
+            return;
+        }
+
+        console.log(`✅ Successfully loaded ${data.length} teams`);
+
+        // Build the table rows
+        data.forEach((team, index) => {
+            const toPar = team.score || 0;
+            const toParText = toPar < 0 ? toPar : toPar === 0 ? 'E' : `+${toPar}`;
+            const toParClass = toPar < 0 ? 'topar-under' : toPar === 0 ? 'topar-even' : 'topar-over';
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td style="font-weight:700; font-size:20px; color:#00C7B2; text-align:center;">${index + 1}</td>
+                <td style="font-weight:600; text-align:left; padding-left:12px;">${team.team_name || 'Unnamed Team'}</td>
+                <td style="color:#9ca3af; font-size:14.5px; text-align:left;">${team.players || '—'}</td>
+                <td style="font-weight:700; font-size:20px; color:#00C7B2; text-align:center;">${team.score || 0}</td>
+                <td style="font-weight:500; text-align:center;">${team.thru || 'F'}</td>
+                <td class="${toParClass}" style="font-weight:700; font-size:19px; text-align:center;">${toParText}</td>
+                <td style="text-align:center;">
+                    <button onclick="editTeam('${team.id}')" style="background:none;border:none;color:#00C7B2;font-size:20px;cursor:pointer;">✏️</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        // Update last updated with live timer
+        updateLastUpdatedTime();
+
+    } catch (err) {
+        console.error("❌ Load error:", err);
+        tbody.innerHTML = `<tr><td colspan="7" style="padding:40px; color:#ef4444; text-align:center;">Error loading data</td></tr>`;
+    }
 }
 
-function refreshLeaderboard() {
-  loadGolfLeaderboard();
-}
-
-// Stop auto refresh when leaving the page (optional cleanup)
-window.addEventListener('beforeunload', () => {
-  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-});
-
-function showAddTeamModal() {
-  document.getElementById('teamModal').style.display = 'flex';
-  document.getElementById('modalTeamTitle').textContent = 'Add New Team';
-  document.getElementById('teamId').value = '';
-  document.getElementById('teamName').value = '';
-  document.getElementById('teamPlayers').value = '';
-  document.getElementById('teamScore').value = 0;
-  document.getElementById('teamThru').value = 'F';
-}
-
-function hideTeamModal() {
-  document.getElementById('teamModal').style.display = 'none';
-}
-
-async function saveTeam() {
-  const id = document.getElementById('teamId').value;
-  const teamData = {
-    team_name: document.getElementById('teamName').value.trim(),
-    players: document.getElementById('teamPlayers').value.trim(),
-    score: parseInt(document.getElementById('teamScore').value) || 0,
-    thru: document.getElementById('teamThru').value.trim() || 'F',
-    updated_at: new Date().toISOString()
-  };
-
-  let error;
-  if (id) {
-    ({ error } = await supabaseClient.from('golf_teams').update(teamData).eq('id', id));
-  } else {
-    ({ error } = await supabaseClient.from('golf_teams').insert([teamData]));
-  }
-
-  if (error) alert('Error saving team: ' + error.message);
-  else {
-    hideTeamModal();
-    loadGolfLeaderboard();
-  }
-}
-
-async function editTeam(id) {
-  const { data } = await supabaseClient.from('golf_teams').select('*').eq('id', id).single();
-  if (!data) return;
-
-  document.getElementById('teamModal').style.display = 'flex';
-  document.getElementById('modalTeamTitle').textContent = 'Edit Team';
-  document.getElementById('teamId').value = data.id;
-  document.getElementById('teamName').value = data.team_name;
-  document.getElementById('teamPlayers').value = data.players || '';
-  document.getElementById('teamScore').value = data.score;
-  document.getElementById('teamThru').value = data.thru || 'F';
-}
-
-function refreshLeaderboard() {
-  loadGolfLeaderboard();
-}
 
 // ====================== TIMEZONE HELPER ======================
 const MOUNTAIN_TIMEZONE = 'America/Denver';
@@ -1089,33 +1059,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (memberForm) memberForm.addEventListener('submit', saveMember);
   }
 
-  // ====================== FEED PAGE SETUP ======================
-  if (document.getElementById('feedContainer')) {
-    await loadUser();
-    setupImagePreview();
-    await loadFeed('latest');
-    subscribeToFeed();
-
-  // ====================== GOLF LEADERBOARD PAGE SETUP ======================
-if (document.getElementById('leaderboardBody')) {
+// ====================== FEED PAGE SETUP ======================
+if (document.getElementById('feedContainer')) {
   await loadUser();
-  
-  loadGolfLeaderboard();
-  startAutoRefresh();                    // ← Auto refresh starts here
+  setupImagePreview();
+  await loadFeed('latest');
+  subscribeToFeed();
 
-  // Real-time updates (instant when someone changes score)
-  if (!golfChannel) {
-    golfChannel = supabaseClient.channel('golf-leaderboard')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'golf_teams' 
-      }, () => {
-        loadGolfLeaderboard();
-      })
-      .subscribe();
-  }
-}
 
     // === POLL MODAL LISTENERS - MOVED HERE ===
     const pollModal = document.getElementById('pollModal');
@@ -1131,6 +1081,26 @@ if (document.getElementById('leaderboardBody')) {
       if (addPollOptionBtn) addPollOptionBtn.addEventListener('click', addPollOption);
     }
   }
+  // ====================== GOLF LEADERBOARD PAGE SETUP (Fixed - Independent) ======================
+if (document.getElementById('leaderboardBody')) {
+    console.log("✅ Golf leaderboard page detected - initializing...");
+
+    await loadUser();
+
+    // Give DOM time to load the table
+    setTimeout(async () => {
+        console.log("🔄 Calling loadGolfLeaderboard from golf.html");
+        await loadGolfLeaderboard();
+        subscribeToGolfLeaderboard();
+
+        // Auto-refresh every 15 seconds
+        if (!autoRefreshInterval) {
+            autoRefreshInterval = setInterval(() => {
+                loadGolfLeaderboard();
+            }, 30000);
+        }
+    }, 300);
+}
 
   // ====================== CALENDAR PAGE SETUP ======================
   if (document.getElementById('calendarGrid')) {
@@ -1153,3 +1123,114 @@ if (document.getElementById('leaderboardBody')) {
     });
   }
 });
+// ================================================
+// GOLF PAGE GLOBAL FUNCTIONS (Must be outside DOMContentLoaded)
+// ================================================
+
+function showAddTeamModal() {
+    const modal = document.getElementById('teamModal');
+    if (!modal) return console.error("Team modal not found on this page");
+    
+    modal.style.display = 'flex';
+    document.getElementById('modalTeamTitle').textContent = 'Add New Team';
+    document.getElementById('teamId').value = '';
+    document.getElementById('teamName').value = '';
+    document.getElementById('teamPlayers').value = '';
+    document.getElementById('teamScore').value = '0';
+    document.getElementById('teamThru').value = 'F';
+}
+
+function hideTeamModal() {
+    const modal = document.getElementById('teamModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function saveTeam() {
+    const id = document.getElementById('teamId').value.trim();
+    const teamData = {
+        team_name: document.getElementById('teamName').value.trim(),
+        players: document.getElementById('teamPlayers').value.trim(),
+        score: parseInt(document.getElementById('teamScore').value) || 0,
+        thru: document.getElementById('teamThru').value.trim() || 'F',
+        updated_at: new Date().toISOString()
+    };
+
+    if (!teamData.team_name) {
+        return alert("Team name is required!");
+    }
+
+    try {
+        let error;
+        if (id) {
+            ({ error } = await supabaseClient.from('golf_teams').update(teamData).eq('id', id));
+        } else {
+            ({ error } = await supabaseClient.from('golf_teams').insert([teamData]));
+        }
+
+        if (error) throw error;
+
+        hideTeamModal();
+        await loadGolfLeaderboard();
+        console.log("✅ Team saved successfully");
+    } catch (err) {
+        console.error(err);
+        alert("Error saving team: " + (err.message || err));
+    }
+}
+
+async function editTeam(id) {
+    try {
+        const { data, error } = await supabaseClient
+            .from('golf_teams')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error || !data) throw error || new Error("Team not found");
+
+        const modal = document.getElementById('teamModal');
+        modal.style.display = 'flex';
+        document.getElementById('modalTeamTitle').textContent = 'Edit Team';
+        document.getElementById('teamId').value = data.id;
+        document.getElementById('teamName').value = data.team_name || '';
+        document.getElementById('teamPlayers').value = data.players || '';
+        document.getElementById('teamScore').value = data.score || 0;
+        document.getElementById('teamThru').value = data.thru || 'F';
+    } catch (err) {
+        console.error(err);
+        alert("Failed to load team for editing");
+    }
+}
+
+// Expose to onclick handlers in HTML
+window.showAddTeamModal = showAddTeamModal;
+window.hideTeamModal = hideTeamModal;
+window.saveTeam = saveTeam;
+window.editTeam = editTeam;
+
+let lastUpdatedTimestamp = null;
+
+function updateLastUpdatedTime() {
+    const el = document.getElementById('last-updated');
+    if (!el) return;
+
+    lastUpdatedTimestamp = Date.now();
+
+    function tick() {
+        if (!lastUpdatedTimestamp) return;
+        const secondsAgo = Math.floor((Date.now() - lastUpdatedTimestamp) / 1000);
+        
+        if (secondsAgo < 5) {
+            el.textContent = `Last updated: Just now`;
+        } else if (secondsAgo < 60) {
+            el.textContent = `Last updated: ${secondsAgo}s ago`;
+        } else {
+            const minutesAgo = Math.floor(secondsAgo / 60);
+            el.textContent = `Last updated: ${minutesAgo}m ago`;
+        }
+    }
+
+    tick(); // initial call
+    // Update every 10 seconds
+    setInterval(tick, 10000);
+}

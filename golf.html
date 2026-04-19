@@ -21,9 +21,6 @@
           <button onclick="showAddTeamModal()" class="add-team-btn">
             <i class="fas fa-plus"></i> Add Team
           </button>
-          <button onclick="refreshLeaderboard()" class="refresh-btn">
-            <i class="fas fa-sync-alt"></i> Refresh
-          </button>
         </div>
       </div>
       <p id="last-updated" style="margin-top:8px; opacity:0.8; font-size:0.95rem;">Last updated: just now</p>
@@ -34,14 +31,15 @@
       <div class="table-container">
         <table class="leaderboard-table" id="leaderboardTable">
           <thead>
-            <tr>
+          <tr>
               <th>Pos</th>
               <th>Team</th>
+              <th>Players</th>
               <th>Score</th>
               <th>Thru</th>
               <th>To Par</th>
               <th style="width:50px;"></th>
-            </tr>
+          </tr>
           </thead>
           <tbody id="leaderboardBody"></tbody>
         </table>
