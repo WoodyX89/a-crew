@@ -311,6 +311,11 @@ async function loadFeed(sortBy = 'latest') {
   data.forEach(renderPost);
 }
 
+function changeSort() {
+  const sortBy = document.getElementById('sortSelect').value;
+  loadFeed(sortBy);
+}
+
 async function toggleLike(postId) {
   const likedKey = `liked_${postId}`;
   if (localStorage.getItem(likedKey)) {
