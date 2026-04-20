@@ -311,11 +311,27 @@ async function loadFeed(sortBy = 'latest') {
 }
 
 async function toggleLike(postId) {
-  const { data: current } = await supabaseClient.from('posts').select('likes').eq('id', postId).single();
+  const likedKey = `liked_${postId}`;
+  if (localStorage.getItem(likedKey)) {
+    alert("You already liked this post!");
+    return;
+  }
+
+  const { data: current } = await supabaseClient
+    .from('posts')
+    .select('likes')
+    .eq('id', postId)
+    .single();
+
   const newLikes = (current?.likes || 0) + 1;
 
-  const { error } = await supabaseClient.from('posts').update({ likes: newLikes }).eq('id', postId);
+  const { error } = await supabaseClient
+    .from('posts')
+    .update({ likes: newLikes })
+    .eq('id', postId);
+
   if (!error) {
+    localStorage.setItem(likedKey, 'true');
     const countEl = document.getElementById(`like-count-${postId}`);
     if (countEl) {
       countEl.textContent = newLikes;
