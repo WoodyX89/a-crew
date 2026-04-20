@@ -294,7 +294,7 @@ async function loadFeed(sortBy = 'latest') {
   let query = supabaseClient.from('posts').select('*');
   if (sortBy === 'latest') query = query.order('created_at', { ascending: true });
   else if (sortBy === 'oldest') query = query.order('created_at', { ascending: false });
-  else if (sortBy === 'popular') query = query.order('likes', { ascending: false });
+  else if (sortBy === 'popular') query = query.order('likes', { ascending: true });
 
   const { data, error } = await query;
   container.innerHTML = '';
