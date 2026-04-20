@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Join the Crew - Invite Only</title>
+  <link rel="icon" href="../favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #035747, #022f3a);
+      color: white;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+    }
+    .card {
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(12px);
+      padding: 40px 35px;
+      border-radius: 24px;
+      width: 100%;
+      max-width: 420px;
+      border: 1px solid rgba(0,199,178,0.3);
+      text-align: center;
+    }
+    .logo {
+      width: 110px;
+      height: 110px;
+      margin: 0 auto 25px;
+      border-radius: 20px;
+    }
+    input {
+      width: 100%;
+      max-width: 360px;
+      padding: 15px;
+      margin: 12px auto;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(0,199,178,0.5);
+      border-radius: 12px;
+      color: white;
+      font-size: 1rem;
+      display: block;
+    }
+    .btn {
+      width: 100%;
+      max-width: 360px;
+      padding: 16px;
+      background: #00C7B2;
+      color: #124352;
+      border: none;
+      border-radius: 50px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin: 20px auto 0;
+      display: block;
+    }
+    .btn:hover { background: #55CE33; }
+    .back-link {
+      color: #00C7B2;
+      text-decoration: none;
+      margin-top: 20px;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img src="../assets/logo.png" alt="A Crew Logo" class="logo">
+    <h2>Join the Crew</h2>
+    <p style="color:#aaa;">Invite code required</p>
+
+    <form id="signupForm">
+      <input type="text" id="inviteCode" placeholder="Invite Code (e.g. CREW-2026)" required style="text-transform:uppercase;">
+      <input type="text" id="fullName" placeholder="Full Name" required>
+      <input type="email" id="email" placeholder="Email" required>
+      <input type="password" id="password" placeholder="Password (min 6 characters)" required>
+      <input type="password" id="confirmPassword" placeholder="Confirm Password" required>
+      
+      <button type="submit" class="btn">Create Account</button>
+    </form>
+
+    <a href="../auth/login.html" class="back-link">← Back to Login</a>
+  </div>
+
+  <script>
+    const supabaseClient = supabase.createClient(
+      'https://bwfwnpdjeovqeznwbckx.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3ZnducGRqZW92cWV6bndiY2t4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxOTI2NzIsImV4cCI6MjA5MTc2ODY3Mn0.QohjsfSgvw64ZwSLRCtr_4rh49JyInEmrpDdzrXISQU'
+    );
+
+    document.getElementById('signupForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const inviteCode = document.getElementById('inviteCode').value.trim().toUpperCase();
+      const fullName = document.getElementById('fullName').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+
+      if (!inviteCode) return alert("Invite code is required.");
+      if (password !== confirmPassword) return alert("Passwords do not match!");
+      if (password.length < 6) return alert("Password must be at least 6 characters.");
+
+      try {
+        // 1. Validate invite code
+        const { data: invite, error: inviteError } = await supabaseClient
+          .from('invites')
+          .select('*')
+          .eq('code', inviteCode)
+          .single();
+
+        if (inviteError || !invite) {
+          return alert("Invalid or expired invite code.");
+        }
+
+        if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
+          return alert("This invite code has expired.");
+        }
+        if (invite.used_count >= (invite.max_uses || 1)) {
+          return alert("This invite code has already been used.");
+        }
+
+        // 2. Sign up the user
+        const { data: authData, error: signUpError } = await supabaseClient.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { full_name: fullName }
+          }
+        });
+
+        if (signUpError) throw signUpError;
+
+        // 3. Add to members table
+        if (authData.user) {
+          await supabaseClient.from('members').insert([{
+            id: authData.user.id,
+            full_name: fullName,
+            email: email,
+            role: 'Member',
+            status: 'Active',
+            joined_date: new Date().toISOString()
+          }]);
+
+          // 4. Mark invite as used
+          await supabaseClient
+            .from('invites')
+            .update({ used_count: (invite.used_count || 0) + 1 })
+            .eq('id', invite.id);
+        }
+
+        alert("✅ Account created successfully!\n\nYou can now log in.");
+        window.location.href = '../auth/login.html';
+
+      } catch (err) {
+        console.error(err);
+        alert("Signup failed: " + (err.message || "Unknown error"));
+      }
+    });
+  </script>
+</body>
+</html>

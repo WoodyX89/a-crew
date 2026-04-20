@@ -108,7 +108,135 @@ body {
     border: none;
     padding: 8px;
 }
+/* ====================== DESKTOP DROPDOWN ====================== */
+.dropdown {
+  position: relative;
+}
 
+.dropdown-toggle {
+  color: white;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.dropdown-toggle:hover {
+  color: var(--teal);
+}
+
+/* ====================== DESKTOP SETTINGS DROPDOWN ====================== */
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: #022f3a;           /* Solid dark background */
+  border: 1px solid rgba(0, 199, 178, 0.2);
+  border-radius: 12px;
+  padding: 8px 0;
+  min-width: 210px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+  z-index: 1100;
+}
+
+/* Show dropdown on hover */
+.dropdown:hover .dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* Submenu items - clean & centered */
+.dropdown-item {
+  display: block;
+  padding: 13px 22px;
+  color: #e0f0ff;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 1rem;
+  transition: background 0.25s ease;
+  text-align: left;              /* Keeps text aligned consistently */
+}
+
+/* Subtle hover - no indent, no teal */
+.dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+} 
+
+/* Arrow rotation for desktop (optional) */
+.dropdown:hover .arrow {
+  transform: rotate(180deg);
+}
+
+/* ====================== MOBILE DROPDOWN ====================== */
+.mobile-dropdown-toggle {
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  color: white;
+  font-size: 1.45rem;
+  font-weight: 500;
+  padding: 14px 20px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.mobile-dropdown-toggle:hover,
+.mobile-dropdown-toggle.active {
+  background: var(--teal);
+  color: #124352;
+  transform: translateX(8px);
+}
+
+.mobile-dropdown-toggle .arrow {
+  font-size: 1.2rem;
+  transition: transform 0.3s ease;
+}
+
+.mobile-dropdown-toggle.active .arrow {
+  transform: rotate(180deg);
+}
+
+.mobile-dropdown-menu {
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+  margin: 8px 16px 16px 20px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.mobile-dropdown-menu .mobile-link {
+  font-size: 1.32rem;
+  padding: 12px 28px;
+  margin: 0 8px;
+  border-radius: 8px;
+}
+
+.mobile-dropdown-menu .mobile-link:hover {
+  background: rgba(255, 255, 255, 0.18);
+  transform: translateX(12px);
+}
+
+/* Mobile Logout */
+.mobile-logout {
+  margin-top: 2rem;
+  width: 100%;
+}
 /* Mobile Menu */
 .mobile-menu {
     display: none;
@@ -124,41 +252,122 @@ body {
     overflow-y: auto;
 }
 
+/* ====================== MOBILE MENU HEADER & CLOSE BUTTON ====================== */
+.mobile-header {
+  display: flex;
+  justify-content: flex-end;     /* This pushes the X to the right */
+  padding: 0.5rem 0.5rem 1rem 0; /* Controls spacing around the X */
+  margin-bottom: 1rem;
+}
+
+.close-menu-btn {
+  font-size: 3.5rem;             /* Size of the X */
+  background: none;
+  border: none;
+  color: white;
+  padding: 10px 20px;            /* This controls how much space is around the X */
+  cursor: pointer;
+  line-height: 1;
+  transition: all 0.3s ease;
+  opacity: 0.85;
+}
+
+.close-menu-btn:hover {
+  color: var(--teal);
+  opacity: 1;
+  transform: scale(1.1);
+}
+
 .mobile-menu.active {
     display: flex;
 }
 
+/* Main mobile links container */
 .mobile-links {
-    display: flex;
-    flex-direction: column;
-    gap: 1.2rem;
-    margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;           /* tighter spacing for better blend */
+  margin-top: 2rem;
 }
 
-.mobile-link {
-    color: white;
-    text-decoration: none;
-    font-size: 1.45rem;
-    font-weight: 500;
-    padding: 14px 20px;
-    border-radius: 12px;
-    transition: all 0.3s ease;
+/* Make all mobile links consistent */
+.mobile-link,
+.mobile-dropdown-toggle {
+  color: white;
+  text-decoration: none;
+  font-size: 1.45rem;
+  font-weight: 500;
+  padding: 14px 20px;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;   /* important for arrow */
+  cursor: pointer;
 }
 
+/* Hover/active states */
 .mobile-link:hover,
 .mobile-link:active,
-.mobile-link.active {
-    background: var(--teal);
-    color: #124352;
-    transform: translateX(8px);
+.mobile-dropdown-toggle:hover,
+.mobile-dropdown-toggle.active {
+  background: var(--teal);
+  color: #124352;
+  transform: translateX(8px);
 }
 
 .mobile-link:active {
-    background: #ffffff;
-    color: #124352;
-    transform: scale(0.98);
+  background: #ffffff;
+  color: #124352;
+  transform: scale(0.98);
 }
 
+/* Mobile Dropdown Toggle */
+.mobile-dropdown-toggle {
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+}
+.mobile-dropdown-toggle.active {
+  background: rgba(0, 199, 178, 0.15);   /* Very light teal tint */
+  color: white;
+}
+
+/* Arrow styling */
+.mobile-dropdown-toggle .arrow {
+  font-size: 1.1rem;
+  transition: transform 0.3s ease;
+  margin-left: 8px;
+}
+
+.mobile-dropdown-toggle.active .arrow {
+  transform: rotate(180deg);
+}
+
+/* Dropdown submenu */
+.mobile-dropdown-menu {
+  display: none;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 8px 0;
+  margin: 4px 12px 12px 12px;   /* indented look */
+  background: rgba(255,255,255,0);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.mobile-dropdown-menu .mobile-link {
+  font-size: 1.3rem;           /* slightly smaller for submenu */
+  padding: 12px 24px;          /* more indent */
+  margin: 0 8px;
+  border-radius: 8px;
+}
+
+.mobile-dropdown-menu .mobile-link:hover {
+  background: rgba(255,255,255,0);
+  transform: translateX(12px);
+}
 /* Main Content */
 .main-content {
     max-width: 1200px;
@@ -1054,3 +1263,4 @@ td {
 
 .add-team-btn { background: #00C7B2; color: white; }
 .refresh-btn { background: #374151; color: white; }
+

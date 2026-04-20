@@ -184,13 +184,61 @@ function initMobileMenu() {
   const hamburger = document.getElementById('hamburger');
   const mobileMenu = document.getElementById('mobileMenu');
   const closeMenu = document.getElementById('closeMenu');
-  const mobileLinks = document.querySelectorAll('.mobile-link');
+  const mobileSettingsToggle = document.getElementById('mobileSettingsToggle');
+  const mobileSettingsMenu = document.getElementById('mobileSettingsMenu');
+
   if (!hamburger || !mobileMenu || !closeMenu) return;
 
-  hamburger.addEventListener('click', () => mobileMenu.classList.add('active'));
-  closeMenu.addEventListener('click', () => mobileMenu.classList.remove('active'));
-  mobileLinks.forEach(link => link.addEventListener('click', () => mobileMenu.classList.remove('active')));
+  // Open mobile menu
+  hamburger.addEventListener('click', () => {
+    mobileMenu.classList.add('active');
+    document.body.style.overflow = 'hidden';   // Prevent scrolling behind menu
+  });
+
+  // Close mobile menu
+  closeMenu.addEventListener('click', () => {
+    mobileMenu.classList.remove('active');
+    document.body.style.overflow = 'visible';
+  });
+
+  // Mobile Settings Dropdown Toggle
+  if (mobileSettingsToggle && mobileSettingsMenu) {
+    mobileSettingsToggle.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent closing menu when clicking toggle
+
+      const isOpen = mobileSettingsMenu.style.display === 'flex';
+
+      // Close menu first
+      mobileSettingsMenu.style.display = isOpen ? 'none' : 'flex';
+      mobileSettingsToggle.classList.toggle('active', !isOpen);
+    });
+  }
+
+  // Close mobile menu when clicking any main link (except settings toggle)
+  document.querySelectorAll('.mobile-link').forEach(link => {
+    link.addEventListener('click', () => {
+      // Only close if it's not inside the dropdown
+      if (!link.closest('.mobile-dropdown-menu')) {
+        mobileMenu.classList.remove('active');
+        document.body.style.overflow = 'visible';
+      }
+    });
+  });
+
+  // Close menu when pressing Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && mobileMenu.classList.contains('active')) {
+      mobileMenu.classList.remove('active');
+      document.body.style.overflow = 'visible';
+    }
+  });
 }
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', () => {
+  initMobileMenu();
+});
+
 
 // ====================== MEMBERS FUNCTIONS ======================
 async function loadMembers() {
