@@ -1853,3 +1853,43 @@ td {
     cursor: pointer;
     touch-action: none;
 }
+/* Dancing Select Dropdown */
+.dancing-select {
+    padding: 14px 18px;
+    font-size: 1.05rem;
+    border-radius: 12px;
+    background: rgba(0, 199, 178, 0.15);
+    border: 2px solid #00C7B2;
+    color: white;
+    width: 100%;
+    max-width: 360px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 199, 178, 0.2);
+}
+
+.dancing-select:hover {
+    background: rgba(0, 199, 178, 0.25);
+    transform: scale(1.03);
+    box-shadow: 0 6px 20px rgba(0, 199, 178, 0.4);
+}
+
+.dancing-select:focus {
+    outline: none;
+    background: rgba(0, 199, 178, 0.3);
+    transform: scale(1.05);
+    box-shadow: 0 8px 25px rgba(0, 199, 178, 0.5);
+}
+
+/* Fun bounce animation when selection changes */
+@keyframes danceSelect {
+    0%   { transform: scale(1) rotate(0deg); }
+    25%  { transform: scale(1.08) rotate(2deg); }
+    50%  { transform: scale(1.12) rotate(-2deg); }
+    75%  { transform: scale(1.08) rotate(1deg); }
+    100% { transform: scale(1) rotate(0deg); }
+}
+
+.dancing-select.dance {
+    animation: danceSelect 0.6s ease forwards;
+}

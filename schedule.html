@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <!-- Navbar -->
@@ -109,6 +110,32 @@
         </div>
     </div>
 </div>
+<!-- Fancy Shift Distribution Chart -->
+<!-- Member Shift Breakdown -->
+ <!-- Member-Specific Shift Chart -->
+<!-- Member Shift Breakdown -->
+<div class="card" style="margin-top: 30px;">
+    <h3 style="margin-bottom: 12px; color: #00C7B2;">Member Shift Breakdown</h3>
+    
+    <!-- Dancing Dropdown -->
+    <div style="margin-bottom: 20px; text-align: center;">
+        <select id="memberChartSelect" class="dancing-select">
+            <option value="">Select Member to View Breakdown...</option>
+        </select>
+    </div>
+    
+    <div style="height: 380px;">
+        <canvas id="memberShiftChart"></canvas>
+    </div>
+</div>
+<div class="card" style="margin-top: 30px;">
+    <h3 style="margin-bottom: 20px; color: #00C7B2;">Crew Shift Data</h3>
+    
+    <div id="memberBreakdownContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
+        <!-- Populated dynamically by JavaScript -->
+    </div>
+</div>
+
 
 <script src="js/app.js"></script>
 </body>

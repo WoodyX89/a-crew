@@ -40,6 +40,214 @@ let isDragging = false;
 let selectedDays = [];
 let dragStartElement = null;
 let multiSelectActive = false;
+let memberShiftChartInstance = null;
+
+// ====================== MEMBER-SPECIFIC VERTICAL SHIFT CHART (with dancing dropdown) ======================
+
+
+async function loadMemberChartDropdown() {
+    const select = document.getElementById('memberChartSelect');
+    if (!select) return;
+
+    const { data, error } = await supabaseClient
+        .from('members')
+        .select('full_name')
+        .eq('status', 'Active')
+        .order('full_name');
+
+    if (error) return console.error(error);
+
+    select.innerHTML = '<option value="">Select Member to View Breakdown...</option>';
+
+    data.forEach(member => {
+        const opt = document.createElement('option');
+        opt.value = member.full_name;
+        opt.textContent = member.full_name;
+        select.appendChild(opt);
+    });
+
+    // Add change listener with dance animation
+    select.addEventListener('change', () => {
+        const selectedMember = select.value;
+        
+        // Trigger the dance animation
+        select.classList.remove('dance');
+        void select.offsetWidth; // Force reflow
+        select.classList.add('dance');
+
+        if (selectedMember) {
+            renderMemberShiftChart(selectedMember);
+        } else {
+            if (memberShiftChartInstance) memberShiftChartInstance.destroy();
+        }
+    });
+}
+// ====================== MEMBER SHIFT BREAKDOWN (Total, Top Area, Vacation) ======================
+async function renderMemberShiftBreakdown() {
+    const container = document.getElementById('memberBreakdownContainer');
+    if (!container) return;
+
+    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #9ca3af;">Loading member statistics...</p>';
+
+    // Get all members
+    const { data: members, error: memberError } = await supabaseClient
+        .from('members')
+        .select('full_name')
+        .eq('status', 'Active')
+        .order('full_name');
+
+    if (memberError) {
+        container.innerHTML = '<p style="color:#ef4444;">Error loading members</p>';
+        return;
+    }
+
+    container.innerHTML = '';
+
+    members.forEach(member => {
+        const memberName = member.full_name;
+        let totalShifts = 0;
+        let vacationDays = 0;
+        const areaCounts = {};
+
+        // Count shifts for this member
+        Object.values(scheduleData).forEach(shifts => {
+            shifts.forEach(shift => {
+                if (shift.name === memberName) {
+                    totalShifts++;
+
+                    if (shift.status === 'vacation') {
+                        vacationDays++;
+                    } else {
+                        const area = shift.area || "Unknown";
+                        areaCounts[area] = (areaCounts[area] || 0) + 1;
+                    }
+                }
+            });
+        });
+
+        // Find top area
+        let topArea = "—";
+        let maxCount = 0;
+        Object.keys(areaCounts).forEach(area => {
+            if (areaCounts[area] > maxCount) {
+                maxCount = areaCounts[area];
+                topArea = area;
+            }
+        });
+
+        // Create card for this member
+        const card = document.createElement('div');
+        card.style.cssText = `
+            background: rgba(255,255,255,0.06);
+            border-radius: 16px;
+            padding: 18px;
+            border: 1px solid rgba(0,199,178,0.2);
+        `;
+
+        card.innerHTML = `
+            <h4 style="margin: 0 0 12px 0; color: #00C7B2;">${memberName}</h4>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <span style="color: #a0d8ff;">Total Shifts</span>
+                <strong style="font-size: 1.5rem; color: white;">${totalShifts}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <span style="color: #a0d8ff;">Top Area</span>
+                <strong style="color: #eab308;">${topArea}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span style="color: #a0d8ff;">Vacation Days</span>
+                <strong style="color: #ef4444;">${vacationDays}</strong>
+            </div>
+        `;
+
+        container.appendChild(card);
+    });
+
+    if (members.length === 0) {
+        container.innerHTML = '<p style="color:#9ca3af; text-align:center;">No active members found.</p>';
+    }
+}
+
+function renderMemberShiftChart(memberName) {
+    const canvas = document.getElementById('memberShiftChart');
+    if (!canvas) return;
+
+    const areaCounts = {
+        "LH": 0, "Pretreat": 0, "Demin": 0,
+        "Field": 0, "Comp": 0, "Panel": 0,
+        "Floater": 0, "Supervisor": 0, "Vacation": 0
+    };
+
+    // Count shifts for this specific member
+    Object.values(scheduleData).forEach(shifts => {
+        shifts.forEach(shift => {
+            if (shift.name === memberName) {
+                let key = shift.area || "Unknown";
+
+                if (key === "Floater") key = "Floater";
+                else if (key === "Supervisor") key = "Supervisor";
+                else if (key === "Vacation") key = "Vacation";
+                else if (key.includes("Field")) key = "Field";
+                else if (key.includes("Comp")) key = "Comp";
+                else if (key.includes("Panel")) key = "Panel";
+
+                if (areaCounts[key] !== undefined) {
+                    areaCounts[key]++;
+                }
+            }
+        });
+    });
+
+    const labels = Object.keys(areaCounts).filter(key => areaCounts[key] > 0);
+    const dataValues = labels.map(key => areaCounts[key]);
+
+    // Destroy old chart
+    if (memberShiftChartInstance) {
+        memberShiftChartInstance.destroy();
+    }
+
+    memberShiftChartInstance = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: `${memberName}'s Shifts`,
+                data: dataValues,
+                backgroundColor: '#00C7B2',
+                borderColor: '#ffffff',
+                borderWidth: 1,
+                borderRadius: 6,
+                barThickness: 35
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#022f3a',
+                    titleColor: '#fff',
+                    bodyColor: '#a0d8ff'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.08)' },
+                    ticks: { color: '#a0d8ff' }
+                },
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.08)' },
+                    ticks: { 
+                        color: '#e0f0ff',
+                        font: { size: 13 }
+                    }
+                }
+            }
+        }
+    });
+}
 
 // ====================== SELECTION (Mouse + Touch) ======================
 
@@ -233,7 +441,8 @@ async function applyBulkShift() {
         await loadSchedule();
         await renderCalendar();
     }
-}4
+    renderMemberShiftBreakdown();
+}
 
 // Load events for the current month
 async function loadEventsForMonth(year, month) {
@@ -416,6 +625,7 @@ function renderPost(post) {
   // Actions + Comment Input (Clean)
 
       
+
 // === UPDATED LIKE SECTION ===
 const likeCount = post.likes || 0;
 const showLikersLink = likeCount > 0;
@@ -519,6 +729,112 @@ function subscribeToFeed() {
         .subscribe((status) => {
             console.log('Realtime subscription status:', status);
         });
+}
+
+// ====================== FANCY SHIFT CHART BY AREA (Fixed - No Growth) ======================
+let shiftAreaChartInstance = null;
+
+function renderShiftAreaChart() {
+    const canvas = document.getElementById('shiftAreaChart');
+    if (!canvas) return;
+
+    const areaCounts = {
+        "LH": 0,
+        "Pretreat": 0,
+        "Demin": 0,
+        "Field": 0,
+        "Comp": 0,
+        "Panel": 0,
+        "Floater": 0,
+        "Supervisor": 0,
+        "Vacation": 0
+    };
+
+    // Count shifts from current scheduleData
+    Object.values(scheduleData).forEach(shifts => {
+        shifts.forEach(shift => {
+            let key = shift.area || "Unknown";
+
+            if (key === "Floater") key = "Floater";
+            else if (key === "Supervisor") key = "Supervisor";
+            else if (key === "Vacation") key = "Vacation";
+            else if (key.includes("Field")) key = "Field";
+            else if (key.includes("Comp")) key = "Comp";
+            else if (key.includes("Panel")) key = "Panel";
+
+            if (areaCounts[key] !== undefined) {
+                areaCounts[key]++;
+            } else {
+                areaCounts["Unknown"] = (areaCounts["Unknown"] || 0) + 1;
+            }
+        });
+    });
+
+    const labels = Object.keys(areaCounts).filter(key => areaCounts[key] > 0);
+    const dataValues = labels.map(key => areaCounts[key]);
+
+    // Destroy old chart instance to prevent stacking/growing
+    if (shiftAreaChartInstance) {
+        shiftAreaChartInstance.destroy();
+        shiftAreaChartInstance = null;
+    }
+
+    // Update summary stats
+    const totalShifts = dataValues.reduce((a, b) => a + b, 0);
+    document.getElementById('totalShiftsCount').textContent = totalShifts;
+
+    const topIndex = dataValues.indexOf(Math.max(...dataValues));
+    document.getElementById('topAreaName').textContent = labels[topIndex] || '—';
+
+    document.getElementById('floaterCount').textContent = areaCounts["Floater"] || 0;
+
+    // Create new chart
+    shiftAreaChartInstance = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Shifts Worked',
+                data: dataValues,
+                backgroundColor: [
+                    '#3b82f6', '#eab308', '#8b5cf6', '#ec4899',
+                    '#f97316', '#14b8a6', '#f59e0b', '#22c55e', '#ef4444', '#64748b'
+                ],
+                borderColor: '#ffffff',
+                borderWidth: 1,
+                borderRadius: 8,
+                barThickness: 32
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#022f3a',
+                    titleColor: '#fff',
+                    bodyColor: '#a0d8ff',
+                    padding: 12
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.08)' },
+                    ticks: { color: '#a0d8ff', font: { size: 12 } }
+                },
+                y: {
+                    grid: { color: 'rgba(255,255,255,0.08)' },
+                    ticks: { 
+                        color: '#e0f0ff', 
+                        font: { size: 13 },
+                        padding: 10
+                    }
+                }
+            }
+        }
+    });
 }
 
 // ====================== MOBILE MENU ======================
@@ -1583,6 +1899,8 @@ async function renderCalendar() {
         empty.className = 'calendar-day other-month';
         grid.appendChild(empty);
     }
+
+    renderShiftAreaChart();
 }
 
 // ====================== HANDLE SINGLE CLICK ======================
@@ -1959,9 +2277,11 @@ async function editShift(shiftId, dateStr) {
         addButton.textContent = "Update Shift";
         addButton.onclick = () => updateShift(shiftId, dateStr);
     }
+    
 
     // Optional: Highlight that we're editing
     console.log(`Editing shift ${shiftId} on ${dateStr}`);
+    renderMemberShiftBreakdown();
 }
 
 async function updateShift(shiftId, dateStr) {
@@ -1991,6 +2311,7 @@ async function updateShift(shiftId, dateStr) {
         await loadSchedule();
         showDayDetails(dateStr);   // Refresh the panel
     }
+    renderMemberShiftBreakdown();
 }
 
 async function deleteShift(shiftId, dateStr) {
@@ -2008,6 +2329,7 @@ async function deleteShift(shiftId, dateStr) {
         await loadSchedule();
         showDayDetails(dateStr);   // Refresh the panel
     }
+    renderMemberShiftBreakdown();
 }
 
 // Reset form back to "Add Shift" mode
@@ -2185,6 +2507,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (cancelBtn) cancelBtn.addEventListener('click', () => document.getElementById('memberModal').classList.remove('active'));
     if (memberForm) memberForm.addEventListener('submit', saveMember);
   }
+
+if (document.getElementById('calendarGrid')) {
+    await loadSchedule();
+    await renderCalendar();
+    loadMembersIntoDropdown();
+    loadMemberChartDropdown(); 
+    renderMemberShiftBreakdown();    
+    setupDayDetailsCloseButton();
+
+}  
 
 // ====================== FEED PAGE SETUP ======================
 if (document.getElementById('feedContainer')) {
