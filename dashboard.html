@@ -50,13 +50,13 @@
         <!-- Live Feed -->
 <h2 style="margin: 25px 0 15px;"><i class="fas fa-stream"></i> Live Crew Feed</h2>
 
-<div style="margin-bottom: 20px;">
-    <label>Sort feed: </label>
-    <select id="sortSelect" onchange="changeSort()">
-        <option value="latest">Latest</option>
-        <option value="oldest">Oldest</option>
-        <option value="popular">Most Popular</option>
-    </select>
+<div class="sort-container">
+  <label>Sort feed:</label>
+  <select id="sortSelect" onchange="changeSort()">
+    <option value="latest">Latest</option>
+    <option value="oldest">Oldest</option>
+    <option value="popular">Most Popular</option>
+  </select>
 </div>
 
 <div id="feedContainer"></div>

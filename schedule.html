@@ -43,34 +43,70 @@
         <h3 id="selectedDate"></h3>
 
         <!-- Add Shift Form -->
-        <div style="margin: 20px 0; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px;">
-            <h4>Add Shift</h4>
-            <select id="shiftMember" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;"></select>
-            <select id="shiftArea" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;">
-                <option value="">Select Area...</option>
-                <option value="Pretreat">Pretreat</option>
-                <option value="Demin">Demin</option>
-                <option value="Field 1">Field 1</option>
-                <option value="Field 2">Field 2</option>
-                <option value="Comp 1">Comp 1</option>
-                <option value="Comp 2">Comp 2</option>
-                <option value="Panel 1">Panel 1</option>
-                <option value="Panel 2">Panel 2</option>
-                <option value="LH">LH</option>
-                <option value="SS">SS</option>
-                <option value="FT">FT</option>
-            </select>
-            <select id="shiftStatus" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;">
-                <option value="working">Working</option>
-                <option value="vacation">On Vacation</option>
-            </select>
-            <button onclick="addShift()" style="width:100%; padding:12px; margin-top:12px; background:#00C7B2; color:white; border:none; border-radius:10px; font-weight:600;">
-                Add to Schedule
-            </button>
-        </div>
+<div style="margin: 20px 0; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px;">
+    <h4>Add Shift</h4>
+    
+    <select id="shiftMember" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;"></select>
+    
+    <select id="shiftStatus" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;">
+        <option value="working">Working</option>
+        <option value="vacation">On Vacation</option>
+    </select>
+    
+    <!-- Area dropdown (will be hidden on Vacation) -->
+    <div id="singleAreaGroup">
+        <select id="shiftArea" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;">
+            <option value="">Select Area...</option>
+        </select>
+    </div>
+
+    <button onclick="addShift()" style="width:100%; padding:12px; margin-top:12px; background:#00C7B2; color:white; border:none; border-radius:10px; font-weight:600;">
+        Add to Schedule
+    </button>
+</div>
 
         <h4>Shifts for this day</h4>
         <div id="scheduleList" class="schedule-list"></div>
+    </div>
+</div>
+<!-- Bulk Shift Modal -->
+<!-- Bulk Shift Modal -->
+<div id="bulkShiftModal" class="modal">
+    <div class="modal-content" style="max-width: 480px;">
+        <div class="modal-header">
+            <h2 id="bulkModalTitle">Add Shift to Multiple Days</h2>
+            <button class="close-btn" onclick="hideBulkShiftModal()">✕</button>
+        </div>
+        
+        <div class="modal-body" style="padding: 1.8rem;">
+            <p id="bulkDaysInfo" style="margin-bottom: 16px; color: #a0d8ff;"></p>
+            
+            <div class="form-group">
+                <label>Member</label>
+                <select id="bulkShiftMember" style="width:100%; padding:12px; border-radius:12px;"></select>
+            </div>
+
+            <!-- This is the ORIGINAL Area dropdown we'll hide/show -->
+            <div class="form-group" id="bulkAreaGroup">
+                <label>Area</label>
+                <select id="bulkShiftArea" style="width:100%; padding:12px; border-radius:12px;">
+                    <option value="">Select Area...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Status</label>
+                <select id="bulkShiftStatus" style="width:100%; padding:12px; border-radius:12px;">
+                    <option value="working">Working</option>
+                    <option value="vacation">On Vacation</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="button" class="cancel-btn" onclick="hideBulkShiftModal()">Cancel</button>
+            <button type="button" class="save-btn" onclick="applyBulkShift()">Apply to All Selected Days</button>
+        </div>
     </div>
 </div>
 

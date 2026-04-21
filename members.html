@@ -36,6 +36,7 @@
                         <th>Phone</th>
                         <th>Role</th>
                         <th>Status</th>
+                        <th>Areas</th>
                         <th>Joined</th>
                         <th>Actions</th>
                     </tr>
@@ -50,58 +51,121 @@
 
     <!-- Add/Edit Member Modal -->
     <div id="memberModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modalTitle">Add New Member</h2>
-                <button id="closeModal" class="close-btn">&times;</button>
+        <div class="modal-content" style="max-width: 520px; width: 92%; max-height: 92vh; overflow: hidden; display: flex; flex-direction: column;">
+    
+    <!-- Header stays fixed -->
+    <div class="modal-header">
+        <h2 id="modalTitle">Add New Member</h2>
+        <button class="close-btn" onclick="document.getElementById('memberModal').classList.remove('active')">✕</button>
+    </div>
+
+    <!-- Scrollable Form Body -->
+    <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.8rem; max-height: calc(92vh - 140px);">
+        <form id="memberForm">
+            <input type="hidden" id="memberId">
+
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" id="fullName" required>
             </div>
-            
-            <form id="memberForm">
-                <input type="hidden" id="memberId">
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="email" required>
+            </div>
+            <div class="form-group">
+                <label>Phone</label>
+                <input type="tel" id="phone">
+            </div>
+            <div class="form-group">
+                <label>Role</label>
+                <select id="role">
+                    <option value="Member">Member</option>
+                    <option value="Lead">Lead</option>
+                    <option value="Supervisor">Supervisor</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Status</label>
+                <select id="status">
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                </select>
+            </div>
 
-                <div class="form-group">
-                    <label>Full Name</label>
-                    <input type="text" id="fullName" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Email</label>
-                    <input type="email" id="email" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Phone</label>
-                    <input type="tel" id="phone">
-                </div>
-
-                <div class="form-group">
-                    <label>Role</label>
-                    <select id="role" required>
-                        <option value="Supervisor">Supervisor</option>
-                        <option value="Lead Hand">Lead Hand</option>
-                        <option value="Group 1">Group 1</option>
-                        <option value="Group 2">Group 2</option>
-                        <option value="Group 3">Group 3</option>
-                        <option value="Group 4">Group 4</option>
-                        <option value="Group 5">Group 5</option>
-                        <option value="Group 6">Group 6</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Status</label>
-                    <select id="status">
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                    </select>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" id="cancelBtn" class="cancel-btn">Cancel</button>
-                    <button type="submit" id="saveBtn" class="save-btn">Save Member</button>
-                </div>
-            </form>
+            <!-- Certifications Section - Cleaner & Tighter -->
+<!-- New Status Dropdowns for Each Area -->
+<div class="form-group">
+    <label style="display:block; margin-bottom:16px; font-weight:600;">Area Status (Certified / Training)</label>
+    
+    <div class="status-grid">
+        <div class="status-row">
+            <span class="area-name">Supervisor</span>
+            <select id="supervisor_status" class="status-select">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+                <option value="Training">Training</option>
+            </select>
         </div>
+        <div class="status-row">
+            <span class="area-name">LH</span>
+            <select id="lh_status" class="status-select">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+                <option value="Training">Training</option>
+            </select>
+        </div>
+        <div class="status-row">
+            <span class="area-name">PT (Pretreat)</span>
+            <select id="pt_status" class="status-select">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+                <option value="Training">Training</option>
+            </select>
+        </div>
+        <div class="status-row">
+            <span class="area-name">Demin</span>
+            <select id="demin_status" class="status-select">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+                <option value="Training">Training</option>
+            </select>
+        </div>
+        <div class="status-row">
+            <span class="area-name">Field</span>
+            <select id="field_status" class="status-select">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+                <option value="Training">Training</option>
+            </select>
+        </div>
+        <div class="status-row">
+            <span class="area-name">Comp</span>
+            <select id="comp_status" class="status-select">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+                <option value="Training">Training</option>
+            </select>
+        </div>
+        <div class="status-row">
+            <span class="area-name">Panel</span>
+            <select id="panel_status" class="status-select">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+                <option value="Training">Training</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+        </form>
+    </div>
+
+    <!-- Footer with buttons - stays fixed at bottom -->
+    <div class="form-actions">
+        <button type="button" class="cancel-btn" onclick="document.getElementById('memberModal').classList.remove('active')">Cancel</button>
+        <button type="submit" form="memberForm" class="save-btn">Save Member</button>
+    </div>
+</div>    
     </div>
 
     <script src="js/app.js"></script>

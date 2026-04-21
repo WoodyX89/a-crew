@@ -35,7 +35,232 @@ let feedChannel = null;
 let currentSort = 'latest';
 let scheduleData = {};
 let currentDate = new Date();
+let eventsThisMonth = {};   // Will store events by dateStr
+let isDragging = false;
+let selectedDays = [];
+let dragStartElement = null;
 
+// ====================== SELECTION (Mouse + Touch) ======================
+
+
+async function showBulkShiftModal() {
+    const memberName = prompt("Enter Member Name for all selected days:");
+    if (!memberName) return clearSelection();
+
+    const area = prompt("Enter Area (or type 'Floater'):");
+    if (!area) return clearSelection();
+
+    const status = confirm("Is this a Vacation?") ? "vacation" : "working";
+
+    const inserts = selectedDays.map(dateStr => ({
+        date: dateStr,
+        member_name: memberName,
+        area: area,
+        status: status,
+        is_floater: area.toLowerCase() === "floater"
+    }));
+
+    const { error } = await supabaseClient.from('schedule').insert(inserts);
+
+    if (error) {
+        alert("Failed to add shifts: " + error.message);
+    } else {
+        alert(`✅ Successfully added shift to ${selectedDays.length} days!`);
+        await loadSchedule();
+        renderCalendar();
+    }
+
+    clearSelection();
+}
+
+// ====================== BULK SHIFT MODAL FUNCTIONS ======================
+// ====================== BULK SHIFT MODAL FUNCTIONS (with Vacation logic) ======================
+function showBulkShiftModal() {
+    const modal = document.getElementById('bulkShiftModal');
+    const daysInfo = document.getElementById('bulkDaysInfo');
+    
+    daysInfo.textContent = `Applying shift to ${selectedDays.length} days`;
+    
+    // Populate members
+    loadMembersIntoBulkDropdown();
+    
+    // Reset form
+    document.getElementById('bulkShiftArea').innerHTML = '<option value="">Select Area...</option>';
+    document.getElementById('bulkShiftStatus').value = 'working';
+    
+    // Show area group by default
+    document.getElementById('bulkAreaGroup').style.display = 'block';
+    
+    modal.classList.add('active');
+}
+
+function hideBulkShiftModal() {
+    document.getElementById('bulkShiftModal').classList.remove('active');
+    clearSelection();
+}
+// Update area visibility when status changes
+document.addEventListener('DOMContentLoaded', () => {
+    const statusSelect = document.getElementById('bulkShiftStatus');
+    if (statusSelect) {
+        statusSelect.addEventListener('change', function() {
+            const areaGroup = document.getElementById('bulkAreaGroup');
+            if (this.value === 'vacation') {
+                areaGroup.style.display = 'none';
+            } else {
+                areaGroup.style.display = 'block';
+            }
+        });
+    }
+});
+// Hide/Show Area dropdown when Status changes in single Add Shift form
+document.addEventListener('DOMContentLoaded', () => {
+    const statusSelect = document.getElementById('shiftStatus');
+    const areaGroup = document.getElementById('singleAreaGroup');
+
+    if (statusSelect && areaGroup) {
+        statusSelect.addEventListener('change', function() {
+            areaGroup.style.display = (this.value === 'vacation') ? 'none' : 'block';
+        });
+    }
+});
+
+async function loadMembersIntoBulkDropdown() {
+    const select = document.getElementById('bulkShiftMember');
+    select.innerHTML = '<option value="">Select Member...</option>';
+
+    const { data, error } = await supabaseClient
+        .from('members')
+        .select('*')
+        .eq('status', 'Active')
+        .order('full_name');
+
+    if (error) return console.error(error);
+
+    data.forEach(member => {
+        const opt = document.createElement('option');
+        opt.value = member.full_name;
+        opt.textContent = member.full_name;
+        opt.dataset.member = JSON.stringify(member);
+        select.appendChild(opt);
+    });
+
+    // Auto-update area options when member changes
+    select.addEventListener('change', updateBulkShiftAreas);
+}
+
+function updateBulkShiftAreas() {
+    const memberSelect = document.getElementById('bulkShiftMember');
+    const areaSelect = document.getElementById('bulkShiftArea');
+
+    areaSelect.innerHTML = '<option value="">Select Area...</option>';
+
+    const selectedOpt = memberSelect.options[memberSelect.selectedIndex];
+    if (!selectedOpt || !selectedOpt.dataset.member) return;
+
+    const member = JSON.parse(selectedOpt.dataset.member);
+
+    // Supervisors only get Supervisor
+    if (member.supervisor_status === 'Yes' || member.supervisor_status === 'Training') {
+        const opt = document.createElement('option');
+        opt.value = "Supervisor";
+        opt.textContent = "Supervisor";
+        areaSelect.appendChild(opt);
+        return;
+    }
+
+    // Regular areas + Floater
+    const areas = [];
+
+    if (member.lh_status === 'Yes' || member.lh_status === 'Training') areas.push({value:"LH", text:"LH"});
+    if (member.pt_status === 'Yes' || member.pt_status === 'Training') areas.push({value:"Pretreat", text:"PT (Pretreat)"});
+    if (member.demin_status === 'Yes' || member.demin_status === 'Training') areas.push({value:"Demin", text:"Demin"});
+    
+    if (member.field_status === 'Yes' || member.field_status === 'Training') {
+        areas.push({value:"Field 1", text:"Field 1"});
+        areas.push({value:"Field 2", text:"Field 2"});
+    }
+    if (member.comp_status === 'Yes' || member.comp_status === 'Training') {
+        areas.push({value:"Comp 1", text:"Comp 1"});
+        areas.push({value:"Comp 2", text:"Comp 2"});
+    }
+    if (member.panel_status === 'Yes' || member.panel_status === 'Training') {
+        areas.push({value:"Panel 1", text:"Panel 1"});
+        areas.push({value:"Panel 2", text:"Panel 2"});
+    }
+
+    // Always add Floater
+    areas.push({value:"Floater", text:"Float"});
+
+    areas.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.value;
+        opt.textContent = a.text;
+        areaSelect.appendChild(opt);
+    });
+}
+
+async function applyBulkShift() {
+    const memberName = document.getElementById('bulkShiftMember').value.trim();
+    const status = document.getElementById('bulkShiftStatus').value;
+    let area = "";
+
+    if (!memberName) return alert("Please select a member.");
+
+    // Only require area if NOT on vacation
+    if (status !== 'vacation') {
+        area = document.getElementById('bulkShiftArea').value.trim();
+        if (!area) return alert("Please select an area.");
+    } else {
+        area = "Vacation";   // Optional: you can store this in area field
+    }
+
+    const inserts = selectedDays.map(dateStr => ({
+        date: dateStr,
+        member_name: memberName,
+        area: area,
+        status: status,
+        is_floater: area === "Floater"
+    }));
+
+    const { error } = await supabaseClient.from('schedule').insert(inserts);
+
+    if (error) {
+        alert("Failed to add shifts: " + error.message);
+    } else {
+        alert(`✅ Successfully added ${status === 'vacation' ? 'vacation' : 'shift'} to ${selectedDays.length} days!`);
+        hideBulkShiftModal();
+        await loadSchedule();
+        await renderCalendar();
+    }
+}4
+
+// Load events for the current month
+async function loadEventsForMonth(year, month) {
+    eventsThisMonth = {};
+
+    const startDate = `${year}-${String(month+1).padStart(2,'0')}-01`;
+    const endDate = `${year}-${String(month+1).padStart(2,'0')}-${new Date(year, month+1, 0).getDate()}`;
+
+    const { data, error } = await supabaseClient
+        .from('posts')
+        .select('event_date, event_title')
+        .eq('post_type', 'event')
+        .gte('event_date', startDate)
+        .lte('event_date', endDate + 'T23:59:59');
+
+    if (error) {
+        console.error("Error loading events:", error);
+        return;
+    }
+
+    data.forEach(event => {
+        if (event.event_date) {
+            const dateStr = event.event_date.split('T')[0]; // Get YYYY-MM-DD
+            if (!eventsThisMonth[dateStr]) eventsThisMonth[dateStr] = [];
+            eventsThisMonth[dateStr].push(event);
+        }
+    });
+}
 // ====================== DELETE POST FUNCTION (Minimal Test Version) ======================
 async function deletePost(postId) {
   if (!currentUser) {
@@ -355,75 +580,109 @@ document.addEventListener('DOMContentLoaded', () => {
   initMobileMenu();
 });
 
-// ====================== MEMBERS FUNCTIONS ======================
+// ====================== MEMBERS FUNCTIONS - UPDATED WITH CERTIFICATIONS ======================
 async function loadMembers() {
-  const tbody = document.getElementById('membersBody');
-  const listContainer = document.getElementById('membersList');
-  if (!tbody && !listContainer) return;
+    const tbody = document.getElementById('membersBody');
+    const listContainer = document.getElementById('membersList');
 
-  const { data, error } = await supabaseClient
-      .from('members')
-      .select('*')
-      .order('joined_date', { ascending: false });
+    if (!tbody && !listContainer) return;
 
-  if (error) {
-    console.error(error);
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7">Error loading members</td></tr>`;
-    if (listContainer) listContainer.innerHTML = `<p>Error loading members</p>`;
-    return;
-  }
+    const { data, error } = await supabaseClient
+        .from('members')
+        .select('*')
+        .order('full_name', { ascending: true });
 
-  if (tbody) tbody.innerHTML = '';
-  if (listContainer) listContainer.innerHTML = '';
+    if (error) {
+        console.error(error);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8">Error loading members</td></tr>`;
+        if (listContainer) listContainer.innerHTML = `<p>Error loading members</p>`;
+        return;
+    }
 
-  if (!data || data.length === 0) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7">No members found yet.</td></tr>`;
-    if (listContainer) listContainer.innerHTML = `<p>No members found yet.</p>`;
-    return;
-  }
+    if (tbody) tbody.innerHTML = '';
+    if (listContainer) listContainer.innerHTML = '';
 
-  // Render Desktop Table
-  if (tbody) {
-    data.forEach(member => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${member.full_name || 'N/A'}</td>
-        <td>${member.email || 'N/A'}</td>
-        <td>${member.phone || 'N/A'}</td>
-        <td>${member.role || 'Member'}</td>
-        <td>${member.status || 'Active'}</td>
-        <td>${new Date(member.joined_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
-        <td>
-          <button class="edit-btn" data-id="${member.id}">Edit</button>
-          <button class="delete-btn" data-id="${member.id}">Delete</button>
-        </td>`;
-      tbody.appendChild(row);
-    });
-  }
+    if (!data || data.length === 0) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8">No members found yet.</td></tr>`;
+        if (listContainer) listContainer.innerHTML = `<p>No members found yet.</p>`;
+        return;
+    }
 
-  // Render Mobile Cards
-  if (listContainer) {
-    data.forEach(member => {
-      const card = document.createElement('div');
-      card.className = 'member-card';
-      card.innerHTML = `
-        <h3>${member.full_name || 'N/A'}</h3>
-        <p><strong>Email:</strong> ${member.email || 'N/A'}</p>
-        <p><strong>Phone:</strong> ${member.phone || 'N/A'}</p>
-        <p><strong>Role:</strong> ${member.role || 'Member'}</p>
-        <p><strong>Status:</strong> ${member.status || 'Active'}</p>
-        <p><strong>Joined:</strong> ${new Date(member.joined_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
-        <button class="edit-btn" data-id="${member.id}">Edit</button>
-        <button class="delete-btn" data-id="${member.id}">Delete</button>`;
-      listContainer.appendChild(card);
-    });
-  }
+    // ====================== DESKTOP TABLE ======================
+    if (tbody) {
+        data.forEach(member => {
+            const certBadges = getMemberBadges(member);
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${member.full_name || 'N/A'}</td>
+                <td>${member.email || 'N/A'}</td>
+                <td>${member.phone || '—'}</td>
+                <td>${member.role || 'Member'}</td>
+                <td>${member.status || 'Active'}</td>
+                <td class="certifications-cell">${certBadges}</td>
+                <td>${new Date(member.joined_date || member.created_at || Date.now()).toLocaleDateString('en-US', { 
+                    year: 'numeric', month: 'short', day: 'numeric' 
+                })}</td>
+                <td>
+                    <button class="edit-btn" data-id="${member.id}">Edit</button>
+                    <button class="delete-btn" data-id="${member.id}">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
 
-  // IMPORTANT: Call this AFTER the buttons are added to the DOM
-  setTimeout(addActionListeners, 10);   // Small delay ensures DOM is updated
+    // ====================== MOBILE CARDS ======================
+    if (listContainer) {
+        data.forEach(member => {
+            const certBadges = getMemberBadges(member);
+
+            const card = document.createElement('div');
+            card.className = 'member-card';
+            card.innerHTML = `
+                <h3>${member.full_name || 'N/A'}</h3>
+                <p><strong>Email:</strong> ${member.email || 'N/A'}</p>
+                <p><strong>Phone:</strong> ${member.phone || '—'}</p>
+                <p><strong>Role:</strong> ${member.role || 'Member'}</p>
+                <p><strong>Status:</strong> ${member.status || 'Active'}</p>
+                <p><strong>Joined:</strong> ${new Date(member.joined_date || member.created_at || Date.now()).toLocaleDateString('en-US', { 
+                    year: 'numeric', month: 'short', day: 'numeric' 
+                })}</p>
+                
+                <div style="margin: 12px 0 8px 0;">
+                    <strong>Certifications:</strong><br>
+                    ${certBadges || '<span style="color:#9ca3af; font-style:italic;">None</span>'}
+                </div>
+
+                <div style="display: flex; gap: 8px;">
+                    <button class="edit-btn" data-id="${member.id}">Edit</button>
+                    <button class="delete-btn" data-id="${member.id}">Delete</button>
+                </div>
+            `;
+            listContainer.appendChild(card);
+        });
+    }
+
+    // Re-attach button listeners
+    setTimeout(addActionListeners, 10);
 }
 
+// Helper function to generate certification badges
+function getCertificationBadges(member) {
+    if (!member) return '';
 
+    const badges = [];
+
+    if (member.is_supervisor) badges.push('<span class="cert-badge supervisor">Supervisor</span>');
+    if (member.certified_lh) badges.push('<span class="cert-badge lh">LH</span>');
+    if (member.certified_pt) badges.push('<span class="cert-badge pt">PT</span>');
+    if (member.certified_demin) badges.push('<span class="cert-badge demin">Demin</span>');
+    if (member.certified_field) badges.push('<span class="cert-badge field">Field</span>');
+    if (member.certified_comp) badges.push('<span class="cert-badge comp">Comp</span>');
+    if (member.certified_panel) badges.push('<span class="cert-badge panel">Panel</span>');
+
+    return badges.join('');
+}
 
 function addActionListeners() {
   document.querySelectorAll('.edit-btn').forEach(btn => {
@@ -935,93 +1194,125 @@ async function createEvent() {
   }
 }
 
+// ====================== OPEN MEMBER MODAL (Updated for dropdowns) ======================
 function openMemberModal(member = null) {
-  const modal = document.getElementById('memberModal');
-  const form = document.getElementById('memberForm');
-  const title = document.getElementById('modalTitle');
-  form.reset();
-  document.getElementById('memberId').value = '';
+    const modal = document.getElementById('memberModal');
+    const title = document.getElementById('modalTitle');
 
-  if (member) {
-    title.textContent = 'Edit Member';
-    currentEditingId = member.id;
-    document.getElementById('memberId').value = member.id;
-    document.getElementById('fullName').value = member.full_name || '';
-    document.getElementById('email').value = member.email || '';
-    document.getElementById('phone').value = member.phone || '';
-    document.getElementById('role').value = member.role || 'Member';
-    document.getElementById('status').value = member.status || 'Active';
-  } else {
-    title.textContent = 'Add New Member';
-    currentEditingId = null;
-  }
-  modal.classList.add('active');
-}
+    const form = document.getElementById('memberForm');
+    if (form) form.reset();
 
-async function saveMember(e) {
-  e.preventDefault();
+    document.getElementById('memberId').value = '';
 
-  if (!currentUser) {
-    return alert("You must be logged in to manage members.");
-  }
+    if (member) {
+        title.textContent = 'Edit Member';
+        currentEditingId = member.id;
+        document.getElementById('memberId').value = member.id;
 
-  const fullName = document.getElementById('fullName').value.trim();
-  const email = document.getElementById('email').value.trim();
+        document.getElementById('fullName').value = member.full_name || '';
+        document.getElementById('email').value = member.email || '';
+        document.getElementById('phone').value = member.phone || '';
+        document.getElementById('role').value = member.role || 'Member';
+        document.getElementById('status').value = member.status || 'Active';
 
-  if (!fullName || !email) {
-    return alert("Full name and email are required.");
-  }
+        // Set dropdown values (default to "No" if null/empty)
+        document.getElementById('supervisor_status').value = member.supervisor_status || 'No';
+        document.getElementById('lh_status').value = member.lh_status || 'No';
+        document.getElementById('pt_status').value = member.pt_status || 'No';
+        document.getElementById('demin_status').value = member.demin_status || 'No';
+        document.getElementById('field_status').value = member.field_status || 'No';
+        document.getElementById('comp_status').value = member.comp_status || 'No';
+        document.getElementById('panel_status').value = member.panel_status || 'No';
 
-  const memberData = {
-    full_name: fullName,
-    email: email,
-    phone: document.getElementById('phone').value.trim() || null,
-    role: document.getElementById('role').value,
-    status: document.getElementById('status').value,
-    updated_at: new Date().toISOString()
-  };
+    } else {
+        title.textContent = 'Add New Member';
+        currentEditingId = null;
 
-  let error;
-
-  if (currentEditingId) {
-    // UPDATE
-    ({ error } = await supabaseClient
-      .from('members')
-      .update(memberData)
-      .eq('id', currentEditingId));
-
-    if (!error) alert("✅ Member updated successfully!");
-  } 
-  else {
-    // INSERT NEW MEMBER
-    memberData.id = crypto.randomUUID();     // Generate new UUID
-
-    // Optional: prevent duplicate emails
-    const { data: existing } = await supabaseClient
-      .from('members')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
-
-    if (existing) {
-      return alert(`A member with email "${email}" already exists.`);
+        // Reset all dropdowns to "No" when adding new member
+        document.getElementById('supervisor_status').value = 'No';
+        document.getElementById('lh_status').value = 'No';
+        document.getElementById('pt_status').value = 'No';
+        document.getElementById('demin_status').value = 'No';
+        document.getElementById('field_status').value = 'No';
+        document.getElementById('comp_status').value = 'No';
+        document.getElementById('panel_status').value = 'No';
     }
 
-    ({ error } = await supabaseClient
-      .from('members')
-      .insert([memberData]));
+    modal.classList.add('active');
+}
 
-    if (!error) alert("✅ Member added successfully!");
-  }
+// ====================== SAVE MEMBER (Updated for dropdowns) ======================
+async function saveMember(e) {
+    if (e) e.preventDefault();
 
-  if (error) {
-    console.error("Save error:", error);
-    alert('Error saving member: ' + error.message);
-    return;
-  }
+    if (!currentUser) {
+        return alert("You must be logged in to manage members.");
+    }
 
-  document.getElementById('memberModal').classList.remove('active');
-  await loadMembers();
+    const fullName = document.getElementById('fullName').value.trim();
+    const email = document.getElementById('email').value.trim();
+
+    if (!fullName || !email) {
+        return alert("Full name and email are required.");
+    }
+
+    const memberData = {
+        full_name: fullName,
+        email: email,
+        phone: document.getElementById('phone').value.trim() || null,
+        role: document.getElementById('role').value,
+        status: document.getElementById('status').value,
+        updated_at: new Date().toISOString(),
+        
+        // New Status Dropdowns
+        supervisor_status: document.getElementById('supervisor_status').value,
+        lh_status: document.getElementById('lh_status').value,
+        pt_status: document.getElementById('pt_status').value,
+        demin_status: document.getElementById('demin_status').value,
+        field_status: document.getElementById('field_status').value,
+        comp_status: document.getElementById('comp_status').value,
+        panel_status: document.getElementById('panel_status').value
+    };
+
+    let error;
+
+    if (currentEditingId) {
+        // UPDATE MEMBER
+        ({ error } = await supabaseClient
+            .from('members')
+            .update(memberData)
+            .eq('id', currentEditingId));
+
+        if (!error) alert("✅ Member updated successfully!");
+    } else {
+        // CREATE NEW MEMBER
+        memberData.id = crypto.randomUUID();
+
+        const { data: existing } = await supabaseClient
+            .from('members')
+            .select('id')
+            .eq('email', email)
+            .maybeSingle();
+
+        if (existing) {
+            return alert(`A member with email "${email}" already exists.`);
+        }
+
+        ({ error } = await supabaseClient
+            .from('members')
+            .insert([memberData]));
+
+        if (!error) alert("✅ New member added successfully!");
+    }
+
+    if (error) {
+        console.error("Save error:", error);
+        alert("Error saving member: " + error.message);
+        return;
+    }
+
+    document.getElementById('memberModal').classList.remove('active');
+    await loadMembers();
 }
 
 async function deleteMember(id) {
@@ -1142,7 +1433,37 @@ async function createTextPost() {
     loadFeed(currentSort);
   }
 }
+// ====================== CERTIFICATION BADGES (with Training support) ======================
+function getMemberBadges(member) {
+    const badges = [];
 
+    const addBadge = (area, className, displayText) => {
+        badges.push(`<span class="cert-badge ${className}">${displayText}</span>`);
+    };
+
+    if (member.supervisor_status === 'Yes') addBadge('supervisor', 'supervisor', 'Supervisor');
+    else if (member.supervisor_status === 'Training') addBadge('supervisor', 'training', 'Supervisor (Training)');
+
+    if (member.lh_status === 'Yes') addBadge('lh', 'lh', 'LH');
+    else if (member.lh_status === 'Training') addBadge('lh', 'training', 'LH (Training)');
+
+    if (member.pt_status === 'Yes') addBadge('pt', 'pt', 'PT');
+    else if (member.pt_status === 'Training') addBadge('pt', 'training', 'PT (Training)');
+
+    if (member.demin_status === 'Yes') addBadge('demin', 'demin', 'Demin');
+    else if (member.demin_status === 'Training') addBadge('demin', 'training', 'Demin (Training)');
+
+    if (member.field_status === 'Yes') addBadge('field', 'field', 'Field');
+    else if (member.field_status === 'Training') addBadge('field', 'training', 'Field (Training)');
+
+    if (member.comp_status === 'Yes') addBadge('comp', 'comp', 'Comp');
+    else if (member.comp_status === 'Training') addBadge('comp', 'training', 'Comp (Training)');
+
+    if (member.panel_status === 'Yes') addBadge('panel', 'panel', 'Panel');
+    else if (member.panel_status === 'Training') addBadge('panel', 'training', 'Panel (Training)');
+
+    return badges.join('');
+}
 // ====================== SCHEDULE / CALENDAR FUNCTIONS ======================
 async function loadSchedule() {
   const { data, error } = await supabaseClient
@@ -1169,24 +1490,170 @@ async function loadSchedule() {
   });
 }
 
-function renderCalendar() {
-  const grid = document.getElementById('calendarGrid');
-  if (!grid) return;
-  grid.innerHTML = '';
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  document.getElementById('monthYear').textContent = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+// ====================== DELETE SHIFT ======================
+async function deleteShift(shiftId, dateStr) {
+    if (!confirm("Delete this shift permanently?")) return;
 
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const { error } = await supabaseClient
+        .from('schedule')
+        .delete()
+        .eq('id', shiftId);
 
-  for (let i = firstDay - 1; i >= 0; i--) grid.appendChild(createDayElement(0, true));
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    grid.appendChild(createDayElement(day, false, dateStr));
-  }
-  const remaining = 42 - (firstDay + daysInMonth);
-  for (let day = 1; day <= remaining; day++) grid.appendChild(createDayElement(day, true));
+    if (error) {
+        console.error(error);
+        alert("Failed to delete shift: " + error.message);
+    } else {
+        alert("✅ Shift deleted.");
+        await loadSchedule();
+        showDayDetails(dateStr);   // Refresh the panel
+    }
+}
+
+// Expose to global scope so onclick works
+window.deleteShift = deleteShift;
+
+// ====================== RENDER CALENDAR (Smooth Long-Press Multi-Select) ======================
+// ====================== RENDER CALENDAR - SMOOTH MOBILE DRAG ======================
+async function renderCalendar() {
+    const grid = document.getElementById('calendarGrid');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+    selectedDays = [];
+
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    document.getElementById('monthYear').textContent = currentDate.toLocaleString('default', { 
+        month: 'long', year: 'numeric' 
+    });
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    await loadEventsForMonth(year, month);
+
+    // Previous month padding
+    for (let i = firstDay - 1; i >= 0; i--) {
+        const empty = document.createElement('div');
+        empty.className = 'calendar-day other-month';
+        grid.appendChild(empty);
+    }
+
+    // Current month days
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        
+        const dayEl = document.createElement('div');
+        dayEl.className = 'calendar-day';
+        dayEl.dataset.date = dateStr;
+
+        if (isSameDayInMountainTime(dateStr)) dayEl.classList.add('today');
+        if (isWorkingDay(dateStr)) dayEl.classList.add('work-day');
+
+        dayEl.innerHTML = `<span>${day}</span>`;
+
+        // Event icon
+        if (eventsThisMonth[dateStr] && eventsThisMonth[dateStr].length > 0) {
+            const icon = document.createElement('div');
+            icon.className = 'event-icon';
+            icon.innerHTML = '📅';
+            icon.addEventListener('click', (e) => { 
+                e.stopPropagation(); 
+                showDayDetails(dateStr); 
+            });
+            dayEl.appendChild(icon);
+        }
+
+        // === Drag Selection (Desktop + Mobile) ===
+        dayEl.addEventListener('mousedown', (e) => startDrag(e, dayEl));
+        dayEl.addEventListener('touchstart', (e) => startDrag(e, dayEl), { passive: false });
+
+        // Single click opens details
+        dayEl.addEventListener('click', (e) => {
+            if (selectedDays.length === 0) {
+                showDayDetails(dateStr);
+            }
+        });
+
+        grid.appendChild(dayEl);
+    }
+
+    // Next month padding
+    const remaining = 42 - (firstDay + daysInMonth);
+    for (let i = 1; i <= remaining; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'calendar-day other-month';
+        grid.appendChild(empty);
+    }
+}
+
+// ====================== SMOOTH DRAG (Prevents Page Scroll) ======================
+function startDrag(e, dayEl) {
+    isDragging = true;
+    selectedDays = [];
+    toggleDaySelection(dayEl);
+
+    const moveHandler = (moveEvent) => onDragMove(moveEvent);
+    const endHandler = () => endDrag(moveHandler, endHandler);
+
+    document.addEventListener('mousemove', moveHandler);
+    document.addEventListener('mouseup', endHandler);
+    document.addEventListener('touchmove', moveHandler, { passive: false });
+    document.addEventListener('touchend', endHandler);
+}
+
+function onDragMove(e) {
+    if (!isDragging) return;
+
+    // Prevent scrolling on mobile
+    if (e.touches) e.preventDefault();
+
+    let clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    let clientY = e.clientY || (e.touches && e.touches[0].clientY);
+
+    const element = document.elementFromPoint(clientX, clientY);
+    
+    if (element && element.classList.contains('calendar-day') && element.dataset.date) {
+        toggleDaySelection(element);
+    }
+}
+
+function toggleDaySelection(dayEl) {
+    const dateStr = dayEl.dataset.date;
+    if (!dateStr) return;
+
+    if (selectedDays.includes(dateStr)) {
+        selectedDays = selectedDays.filter(d => d !== dateStr);
+        dayEl.classList.remove('selected-range');
+    } else {
+        selectedDays.push(dateStr);
+        dayEl.classList.add('selected-range');
+    }
+}
+
+function endDrag(moveHandler, endHandler) {
+    isDragging = false;
+    document.removeEventListener('mousemove', moveHandler);
+    document.removeEventListener('mouseup', endHandler);
+    document.removeEventListener('touchmove', moveHandler);
+    document.removeEventListener('touchend', endHandler);
+
+    if (selectedDays.length > 1) {
+        showBulkShiftModal();
+    } else if (selectedDays.length === 1) {
+        showDayDetails(selectedDays[0]);
+        clearSelection();
+    } else {
+        clearSelection();
+    }
+}
+
+function clearSelection() {
+    document.querySelectorAll('.calendar-day').forEach(el => {
+        el.classList.remove('selected-range');
+    });
+    selectedDays = [];
 }
 
 function createDayElement(dayNum, isOtherMonth, dateStr = '') {
@@ -1228,37 +1695,94 @@ function createDayElement(dayNum, isOtherMonth, dateStr = '') {
   return dayEl;
 }
 
+// ====================== SHOW DAY DETAILS (Fixed - Delete X restored) ======================
 function showDayDetails(dateStr) {
-  const detailsPanel = document.getElementById('dayDetails');
-  const dateTitle = document.getElementById('selectedDate');
-  const list = document.getElementById('scheduleList');
+    const detailsPanel = document.getElementById('dayDetails');
+    const dateTitle = document.getElementById('selectedDate');
+    const list = document.getElementById('scheduleList');
 
-  const displayDate = new Date(dateStr + 'T00:00:00');
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Denver',
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric'
-  });
-
-  dateTitle.textContent = formatter.format(displayDate);
-  dateTitle.dataset.date = dateStr;
-
-  list.innerHTML = '';
-  const shifts = scheduleData[dateStr] || [];
-
-  if (shifts.length === 0) {
-    list.innerHTML = `<p>No manual shifts scheduled for this day.</p>`;
-  } else {
-    shifts.forEach(shift => {
-      const item = document.createElement('div');
-      item.className = `shift-item ${shift.status}`;
-      item.innerHTML = `<strong>${shift.name}</strong><br>${shift.status === 'vacation' ? 'On Vacation' : `Area: ${shift.area || 'Not specified'}`}`;
-      list.appendChild(item);
+    const displayDate = new Date(dateStr + 'T00:00:00');
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Denver',
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
     });
-  }
-  detailsPanel.classList.add('open');
+
+    dateTitle.textContent = formatter.format(displayDate);
+    dateTitle.dataset.date = dateStr;
+
+    list.innerHTML = '';
+
+    const shifts = scheduleData[dateStr] || [];
+    const events = eventsThisMonth[dateStr] || [];
+
+    // Show Events
+    if (events.length > 0) {
+        const eventsHeader = document.createElement('h4');
+        eventsHeader.textContent = 'Events';
+        eventsHeader.style.margin = '15px 0 8px 0';
+        eventsHeader.style.color = '#eab308';
+        list.appendChild(eventsHeader);
+
+        events.forEach(event => {
+            const item = document.createElement('div');
+            item.className = 'shift-item event-item';
+            item.style.position = 'relative';
+            item.innerHTML = `
+                <strong>📅 ${event.event_title}</strong><br>
+                <small>${new Date(event.event_date).toLocaleString([], { 
+                    hour: 'numeric', 
+                    minute: '2-digit' 
+                })}</small>
+            `;
+            list.appendChild(item);
+        });
+    }
+
+    // Show Manual Shifts with Delete X button
+    if (shifts.length > 0) {
+        const shiftsHeader = document.createElement('h4');
+        shiftsHeader.textContent = 'Shifts';
+        shiftsHeader.style.margin = '15px 0 8px 0';
+        list.appendChild(shiftsHeader);
+
+        shifts.forEach(shift => {
+            const item = document.createElement('div');
+            item.className = `shift-item ${shift.status}`;
+            item.style.position = 'relative';   // Important for X button
+
+            const areaText = shift.is_floater ? 
+                '<strong style="color:#f59e0b;">Float</strong>' : 
+                `Area: ${shift.area || 'Not specified'}`;
+
+            item.innerHTML = `
+                <strong>${shift.name}</strong><br>
+                ${areaText}
+            `;
+
+            // Restore Delete "X" button
+            const deleteX = document.createElement('button');
+            deleteX.className = 'shift-delete-x';
+            deleteX.innerHTML = '✕';
+            deleteX.title = 'Delete shift';
+            deleteX.onclick = (e) => {
+                e.stopPropagation();
+                deleteShift(shift.id, dateStr);
+            };
+
+            item.appendChild(deleteX);
+            list.appendChild(item);
+        });
+    }
+
+    // Empty state
+    if (shifts.length === 0 && events.length === 0) {
+        list.innerHTML = `<p style="color:#9ca3af; font-style:italic;">No shifts or events scheduled for this day.</p>`;
+    }
+
+    detailsPanel.classList.add('open');
 }
 
 function setupDayDetailsCloseButton() {
@@ -1266,41 +1790,232 @@ function setupDayDetailsCloseButton() {
   if (closeBtn) closeBtn.addEventListener('click', () => document.getElementById('dayDetails').classList.remove('open'));
 }
 
+// ====================== LOAD MEMBERS INTO DROPDOWN (with certifications) ======================
 async function loadMembersIntoDropdown() {
-  const select = document.getElementById('shiftMember');
-  if (!select) return;
+    const memberSelect = document.getElementById('shiftMember');
+    if (!memberSelect) return;
 
-  const { data, error } = await supabaseClient.from('members').select('full_name').order('full_name');
-  if (error) return console.error(error);
+    const { data, error } = await supabaseClient
+        .from('members')
+        .select('*')
+        .eq('status', 'Active')
+        .order('full_name');
 
-  select.innerHTML = '<option value="">Select Member...</option>';
-  data.forEach(member => {
-    const option = document.createElement('option');
-    option.value = member.full_name;
-    option.textContent = member.full_name;
-    select.appendChild(option);
-  });
+    if (error) {
+        console.error("Error loading members:", error);
+        return;
+    }
+
+    memberSelect.innerHTML = '<option value="">Select Member...</option>';
+
+    data.forEach(member => {
+        const option = document.createElement('option');
+        option.value = member.full_name;
+        option.textContent = member.full_name;
+        // Store the full member object so we can access certifications later
+        option.dataset.member = JSON.stringify(member);
+        memberSelect.appendChild(option);
+    });
+
+    // Add change event to update areas when member is selected
+    memberSelect.addEventListener('change', updateAvailableAreas);
+}
+
+// ====================== UPDATE AVAILABLE AREAS (Includes Floater) ======================
+function updateAvailableAreas() {
+    const memberSelect = document.getElementById('shiftMember');
+    const areaSelect = document.getElementById('shiftArea');
+
+    if (!memberSelect || !areaSelect) return;
+
+    areaSelect.innerHTML = '<option value="">Select Area...</option>';
+
+    const selectedOption = memberSelect.options[memberSelect.selectedIndex];
+    if (!selectedOption || !selectedOption.dataset.member) return;
+
+    const member = JSON.parse(selectedOption.dataset.member);
+
+    // === Supervisors only get "Supervisor" ===
+    if (member.supervisor_status === 'Yes' || member.supervisor_status === 'Training') {
+        const opt = document.createElement('option');
+        opt.value = "Supervisor";
+        opt.textContent = "Supervisor";
+        areaSelect.appendChild(opt);
+        return;
+    }
+
+    // === Regular Members + Floater Option ===
+    const areas = [];
+
+    // Regular certified areas
+    if (member.lh_status === 'Yes' || member.lh_status === 'Training') {
+        areas.push({ value: "LH", text: "LH" });
+    }
+    if (member.pt_status === 'Yes' || member.pt_status === 'Training') {
+        areas.push({ value: "Pretreat", text: "PT (Pretreat)" });
+    }
+    if (member.demin_status === 'Yes' || member.demin_status === 'Training') {
+        areas.push({ value: "Demin", text: "Demin" });
+    }
+    if (member.field_status === 'Yes' || member.field_status === 'Training') {
+        areas.push({ value: "Field 1", text: "Field 1" });
+        areas.push({ value: "Field 2", text: "Field 2" });
+    }
+    if (member.comp_status === 'Yes' || member.comp_status === 'Training') {
+        areas.push({ value: "Comp 1", text: "Comp 1" });
+        areas.push({ value: "Comp 2", text: "Comp 2" });
+    }
+    if (member.panel_status === 'Yes' || member.panel_status === 'Training') {
+        areas.push({ value: "Panel 1", text: "Panel 1" });
+        areas.push({ value: "Panel 2", text: "Panel 2" });
+    }
+
+    // Always add Floater option for everyone
+    areas.push({ value: "Floater", text: "Float" });
+
+    // Populate dropdown
+    areas.forEach(area => {
+        const opt = document.createElement('option');
+        opt.value = area.value;
+        opt.textContent = area.text;
+        areaSelect.appendChild(opt);
+    });
+
+    if (areas.length === 1) {  // Only Floater
+        const opt = document.createElement('option');
+        opt.value = "";
+        opt.textContent = "No certified areas - Floater only";
+        opt.disabled = true;
+        areaSelect.appendChild(opt);
+    }
 }
 
 async function addShift() {
-  const dateStr = document.getElementById('selectedDate').dataset.date;
-  const memberName = document.getElementById('shiftMember').value.trim();
-  const area = document.getElementById('shiftArea').value.trim();
-  const status = document.getElementById('shiftStatus').value;
+    const dateStr = document.getElementById('selectedDate').dataset.date;
+    const memberName = document.getElementById('shiftMember').value.trim();
+    const status = document.getElementById('shiftStatus').value;
+    let area = "";
 
-  if (!dateStr) return alert("Please select a date first.");
-  if (!memberName) return alert("Please select a member.");
-  if (!area) return alert("Please select an area.");
+    if (!dateStr) return alert("Please select a date first.");
+    if (!memberName) return alert("Please select a member.");
 
-  const { error } = await supabaseClient.from('schedule').insert([{ date: dateStr, member_name: memberName, area: area, status: status }]);
-  if (error) alert("Failed to save shift: " + error.message);
-  else {
+    // Only require area if NOT on vacation
+    if (status !== 'vacation') {
+        area = document.getElementById('shiftArea').value.trim();
+        if (!area) return alert("Please select an area.");
+    } else {
+        area = "Vacation";
+    }
+
+    const { error } = await supabaseClient.from('schedule').insert([{
+        date: dateStr,
+        member_name: memberName,
+        area: area,
+        status: status,
+        is_floater: area === "Floater"
+    }]);
+
+    if (error) {
+        alert("Failed to save shift: " + error.message);
+    } else {
+        alert(status === 'vacation' ? "✅ Vacation added successfully!" : "✅ Shift added successfully!");
+        resetAddShiftForm();
+        await loadSchedule();
+        showDayDetails(dateStr);
+    }
+}
+
+// ====================== EDIT & DELETE SHIFT FUNCTIONS ======================
+
+async function editShift(shiftId, dateStr) {
+    if (!shiftId) return;
+
+    // Fetch the current shift data
+    const { data: shift, error } = await supabaseClient
+        .from('schedule')
+        .select('*')
+        .eq('id', shiftId)
+        .single();
+
+    if (error || !shift) {
+        return alert("Could not load shift for editing.");
+    }
+
+    // Pre-fill the form
+    document.getElementById('shiftMember').value = shift.member_name || '';
+    document.getElementById('shiftArea').value = shift.area || '';
+    document.getElementById('shiftStatus').value = shift.status || 'working';
+
+    // Change the Add button to "Update Shift" temporarily
+    const addButton = document.querySelector('#dayDetails button[onclick="addShift()"]');
+    if (addButton) {
+        addButton.textContent = "Update Shift";
+        addButton.onclick = () => updateShift(shiftId, dateStr);
+    }
+
+    // Optional: Highlight that we're editing
+    console.log(`Editing shift ${shiftId} on ${dateStr}`);
+}
+
+async function updateShift(shiftId, dateStr) {
+    const memberName = document.getElementById('shiftMember').value.trim();
+    const area = document.getElementById('shiftArea').value.trim();
+    const status = document.getElementById('shiftStatus').value;
+
+    if (!memberName || !area) {
+        return alert("Member and Area are required.");
+    }
+
+    const { error } = await supabaseClient
+        .from('schedule')
+        .update({
+            member_name: memberName,
+            area: area,
+            status: status,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', shiftId);
+
+    if (error) {
+        alert("Failed to update shift: " + error.message);
+    } else {
+        alert("✅ Shift updated successfully!");
+        resetAddShiftForm();
+        await loadSchedule();
+        showDayDetails(dateStr);   // Refresh the panel
+    }
+}
+
+async function deleteShift(shiftId, dateStr) {
+    if (!confirm("Delete this shift permanently?")) return;
+
+    const { error } = await supabaseClient
+        .from('schedule')
+        .delete()
+        .eq('id', shiftId);
+
+    if (error) {
+        alert("Failed to delete shift: " + error.message);
+    } else {
+        alert("✅ Shift deleted.");
+        await loadSchedule();
+        showDayDetails(dateStr);   // Refresh the panel
+    }
+}
+
+// Reset form back to "Add Shift" mode
+function resetAddShiftForm() {
     document.getElementById('shiftMember').value = '';
     document.getElementById('shiftArea').value = '';
-    await loadSchedule();
-    showDayDetails(dateStr);
-    alert("Shift added successfully!");
-  }
+    document.getElementById('shiftStatus').value = 'working';
+
+    const addButton = document.querySelector('#dayDetails button[onclick^="addShift"]') || 
+                      document.querySelector('#dayDetails button');
+    
+    if (addButton) {
+        addButton.textContent = "Add to Schedule";
+        addButton.onclick = addShift;
+    }
 }
 
 // ====================== GOLF SCRAMBLE LEADERBOARD ======================
@@ -1524,7 +2239,7 @@ if (document.getElementById('leaderboardBody')) {
   // ====================== CALENDAR PAGE SETUP ======================
   if (document.getElementById('calendarGrid')) {
     await loadSchedule();
-    renderCalendar();
+    await renderCalendar();
     loadMembersIntoDropdown();
     setupDayDetailsCloseButton();
 
