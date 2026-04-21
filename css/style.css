@@ -1838,3 +1838,18 @@ td {
     border: 2px solid #eab308;
     box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.4);
 }
+.calendar-grid {
+    user-select: none;           /* Disable text selection */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+.calendar-day {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    cursor: pointer;
+    touch-action: none;
+}

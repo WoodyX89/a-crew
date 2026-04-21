@@ -39,6 +39,7 @@ let eventsThisMonth = {};   // Will store events by dateStr
 let isDragging = false;
 let selectedDays = [];
 let dragStartElement = null;
+let multiSelectActive = false;
 
 // ====================== SELECTION (Mouse + Touch) ======================
 
@@ -1512,14 +1513,14 @@ async function deleteShift(shiftId, dateStr) {
 // Expose to global scope so onclick works
 window.deleteShift = deleteShift;
 
-// ====================== RENDER CALENDAR (Smooth Long-Press Multi-Select) ======================
-// ====================== RENDER CALENDAR - SMOOTH MOBILE DRAG ======================
+// ====================== RENDER CALENDAR - LOCKED SELECTION ======================
 async function renderCalendar() {
     const grid = document.getElementById('calendarGrid');
     if (!grid) return;
 
     grid.innerHTML = '';
     selectedDays = [];
+    multiSelectActive = false;
 
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -1565,16 +1566,12 @@ async function renderCalendar() {
             dayEl.appendChild(icon);
         }
 
-        // === Drag Selection (Desktop + Mobile) ===
+        // Click / Tap handling
+        dayEl.addEventListener('click', (e) => handleDayClick(e, dayEl));
+
+        // Drag / Touch start
         dayEl.addEventListener('mousedown', (e) => startDrag(e, dayEl));
         dayEl.addEventListener('touchstart', (e) => startDrag(e, dayEl), { passive: false });
-
-        // Single click opens details
-        dayEl.addEventListener('click', (e) => {
-            if (selectedDays.length === 0) {
-                showDayDetails(dateStr);
-            }
-        });
 
         grid.appendChild(dayEl);
     }
@@ -1588,11 +1585,29 @@ async function renderCalendar() {
     }
 }
 
-// ====================== SMOOTH DRAG (Prevents Page Scroll) ======================
+// ====================== HANDLE SINGLE CLICK ======================
+function handleDayClick(e, dayEl) {
+    if (isDragging) return;   // Don't trigger click during drag
+
+    const dateStr = dayEl.dataset.date;
+    if (!dateStr) return;
+
+    if (multiSelectActive) {
+        toggleDaySelection(dayEl);   // Add to selection (no deselect)
+    } else {
+        showDayDetails(dateStr);
+    }
+}
+
+// ====================== DRAG / TOUCH START ======================
 function startDrag(e, dayEl) {
     isDragging = true;
-    selectedDays = [];
-    toggleDaySelection(dayEl);
+    if (!multiSelectActive) {
+        selectedDays = [];
+        multiSelectActive = true;
+    }
+
+    toggleDaySelection(dayEl);   // Always add, never remove during drag
 
     const moveHandler = (moveEvent) => onDragMove(moveEvent);
     const endHandler = () => endDrag(moveHandler, endHandler);
@@ -1605,9 +1620,7 @@ function startDrag(e, dayEl) {
 
 function onDragMove(e) {
     if (!isDragging) return;
-
-    // Prevent scrolling on mobile
-    if (e.touches) e.preventDefault();
+    if (e.preventDefault) e.preventDefault();
 
     let clientX = e.clientX || (e.touches && e.touches[0].clientX);
     let clientY = e.clientY || (e.touches && e.touches[0].clientY);
@@ -1615,21 +1628,16 @@ function onDragMove(e) {
     const element = document.elementFromPoint(clientX, clientY);
     
     if (element && element.classList.contains('calendar-day') && element.dataset.date) {
-        toggleDaySelection(element);
+        toggleDaySelection(element);   // Only add, never remove
     }
 }
 
 function toggleDaySelection(dayEl) {
     const dateStr = dayEl.dataset.date;
-    if (!dateStr) return;
+    if (!dateStr || selectedDays.includes(dateStr)) return;   // ← Key change: no deselect
 
-    if (selectedDays.includes(dateStr)) {
-        selectedDays = selectedDays.filter(d => d !== dateStr);
-        dayEl.classList.remove('selected-range');
-    } else {
-        selectedDays.push(dateStr);
-        dayEl.classList.add('selected-range');
-    }
+    selectedDays.push(dateStr);
+    dayEl.classList.add('selected-range');
 }
 
 function endDrag(moveHandler, endHandler) {
@@ -1644,8 +1652,6 @@ function endDrag(moveHandler, endHandler) {
     } else if (selectedDays.length === 1) {
         showDayDetails(selectedDays[0]);
         clearSelection();
-    } else {
-        clearSelection();
     }
 }
 
@@ -1654,6 +1660,7 @@ function clearSelection() {
         el.classList.remove('selected-range');
     });
     selectedDays = [];
+    multiSelectActive = false;
 }
 
 function createDayElement(dayNum, isOtherMonth, dateStr = '') {
