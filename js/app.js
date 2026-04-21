@@ -36,6 +36,83 @@ let currentSort = 'latest';
 let scheduleData = {};
 let currentDate = new Date();
 
+// ====================== DELETE POST FUNCTION (Minimal Test Version) ======================
+async function deletePost(postId) {
+  if (!currentUser) {
+    return alert("You must be logged in.");
+  }
+
+  if (!confirm("Delete this post permanently?")) {
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from('posts')
+      .delete()
+      .eq('id', postId);
+
+    if (error) {
+      console.error("Delete error:", error);
+      alert("Delete failed: " + error.message);
+      return;
+    }
+
+    // Immediate DOM removal - no refresh
+    const element = document.querySelector(`[data-post-id="${postId}"]`);
+    if (element) {
+      element.style.opacity = "0";
+      setTimeout(() => element.remove(), 400);
+    }
+
+    alert("✅ Post deleted.");
+
+    // Do NOT call loadFeed() here
+    console.log("Post removed from DOM. No full refresh called.");
+
+  } catch (err) {
+    console.error(err);
+    alert("Error deleting post.");
+  }
+}
+
+window.deletePost = deletePost;
+
+// ====================== DELETE COMMENT FUNCTION ======================
+async function deleteComment(commentId, postId) {
+    if (!currentUser) {
+        return alert("You must be logged in.");
+    }
+
+    if (!confirm("Delete this comment permanently?")) {
+        return;
+    }
+
+    try {
+        const { error } = await supabaseClient
+            .from('comments')
+            .delete()
+            .eq('id', commentId);
+
+        if (error) {
+            console.error("Delete comment error:", error);
+            alert("Failed to delete comment: " + error.message);
+            return;
+        }
+
+        // Refresh only this post's comments (no full page reload)
+        loadCommentsForPost(postId);
+        alert("✅ Comment deleted.");
+
+    } catch (err) {
+        console.error(err);
+        alert("Error deleting comment.");
+    }
+}
+
+// Expose to global scope so onclick handlers can call it
+window.deleteComment = deleteComment;
+
 function renderPost(post) {
   const container = document.getElementById('feedContainer');
   if (!container) return;
@@ -43,7 +120,9 @@ function renderPost(post) {
   const postEl = document.createElement('div');
   postEl.className = 'card';
   postEl.style.marginBottom = '20px';
+  postEl.style.transition = "all 0.4s ease";
   const postId = post.id;
+  postEl.dataset.postId = postId;
 
   let html = `
     <div class="post-header">
@@ -55,128 +134,165 @@ function renderPost(post) {
     html += `<div class="post-content">${post.content}</div>`;
   }
 
-  // ==================== IMPROVED IMAGE HANDLING ====================
+  // Image handling
   let imageArray = [];
-
   if (post.image_urls) {
-    if (Array.isArray(post.image_urls)) {
-      imageArray = post.image_urls;
-    } else if (typeof post.image_urls === 'string') {
-      try {
-        imageArray = JSON.parse(post.image_urls);
-      } catch (e) {
-        imageArray = [post.image_urls];
-      }
+    if (Array.isArray(post.image_urls)) imageArray = post.image_urls;
+    else if (typeof post.image_urls === 'string') {
+      try { imageArray = JSON.parse(post.image_urls); } 
+      catch (e) { imageArray = [post.image_urls]; }
     }
   }
-
   if (imageArray.length > 0) {
     html += `<div class="post-images">`;
     imageArray.forEach(url => {
       if (url) {
         const cacheBusterUrl = url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
-        html += `<img src="${cacheBusterUrl}"
-                     alt="post image"
-                     loading="lazy"
-                     onerror="console.error('Image failed to load:', '${url}'); this.style.display='none';"
-                     style="max-width:100%; border-radius:12px; margin:10px 0; display:block;">`;
+        html += `<img src="${cacheBusterUrl}" alt="post image" loading="lazy" onerror="this.style.display='none'" style="max-width:100%; border-radius:12px; margin:10px 0; display:block;">`;
       }
     });
     html += `</div>`;
   }
-  // ================================================================
 
+  // Poll
   if (post.post_type === 'poll' && Array.isArray(post.poll_options)) {
-  const totalVotes = Object.values(post.poll_votes || {}).reduce((a, b) => a + b, 0);
-  const hasVoted = post.user_votes && post.user_votes[currentUser?.id];
+    const totalVotes = Object.values(post.poll_votes || {}).reduce((a, b) => a + b, 0);
+    const hasVoted = post.user_votes && post.user_votes[currentUser?.id];
+    html += `<div class="poll"><strong>${post.content || 'Poll Question'}</strong><div class="poll-total">Total votes: ${totalVotes}</div>`;
+    post.poll_options.forEach(option => {
+      const votes = (post.poll_votes && post.poll_votes[option]) || 0;
+      const percentage = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+      const isSelected = hasVoted === option;
+      html += `
+        <div class="poll-option ${isSelected ? 'voted' : ''}" onclick="${!hasVoted ? `voteOnPoll('${post.id}', '${option}')` : ''}">
+          <div class="poll-option-header">
+            <span class="poll-text">${option}</span>
+            ${isSelected ? `<span class="your-vote">✓ Your vote</span>` : ''}
+          </div>
+          <div class="progress-container"><div class="progress-bar" style="width: ${percentage}%"></div></div>
+          <div class="poll-stats"><span class="poll-percentage">${percentage}%</span><span class="poll-votes">${votes} votes</span></div>
+        </div>`;
+    });
+    html += `</div>`;
+  }
 
-  html += `
-  <div class="poll">
-    <strong>${post.content || 'Poll Question'}</strong>
-    <div class="poll-total">Total votes: ${totalVotes}</div>`;
-
-  post.poll_options.forEach((option) => {
-    const votes = (post.poll_votes && post.poll_votes[option]) || 0;
-    const percentage = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
-    const isSelected = hasVoted === option;
-
-    html += `
-      <div class="poll-option ${isSelected ? 'voted' : ''}" 
-           onclick="${!hasVoted ? `voteOnPoll('${post.id}', '${option}')` : ''}">
-        
-        <div class="poll-option-header">
-          <span class="poll-text">${option}</span>
-          ${isSelected ? `<span class="your-vote">✓ Your vote</span>` : ''}
-        </div>
-        
-        <div class="progress-container">
-          <div class="progress-bar" style="width: ${percentage}%"></div>
-        </div>
-        
-        <div class="poll-stats">
-          <span class="poll-percentage">${percentage}%</span>
-          <span class="poll-votes">${votes} votes</span>
-        </div>
-      </div>`;
-  });
-
-  html += `</div>`;
-}
-
+  // Event
   if (post.post_type === 'event' && post.event_title) {
     html += `
       <div class="event">
         <strong>📅 ${post.event_title}</strong><br>
         When: ${new Date(post.event_date).toLocaleString()}<br>
         ${post.event_location ? `Where: ${post.event_location}<br>` : ''}
-        ${post.event_description ? post.event_description : ''}
+        ${post.event_description || ''}
       </div>`;
   }
 
-  html += `
+  // Actions + Comment Input (Clean)
+
+      
+// === UPDATED LIKE SECTION ===
+const likeCount = post.likes || 0;
+const showLikersLink = likeCount > 0;
+
+html += `
     <div class="post-actions">
-      <button onclick="toggleLike('${postId}')" id="like-btn-${postId}" class="action-btn like-btn">
-        ❤️ <span id="like-count-${postId}">${post.likes || 0}</span>
-      </button>
-      <button onclick="toggleCommentBox('${postId}')" class="action-btn comment-btn">
-        💬 Comment
-      </button>
+      <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 8px;">
+        <button onclick="toggleLike('${postId}')" id="like-btn-${postId}" class="action-btn like-btn">
+          ❤️ <span id="like-count-${postId}">${post.likes || 0}</span>
+        </button>
+        
+        <button class="action-btn comment-btn" onclick="toggleCommentBox('${postId}')">💬 Comment</button>
+      </div>
+      
+      <!-- Liked by moved underneath -->
+      ${post.likes > 0 ? `
+        <button onclick="showLikers('${postId}')" id="likers-link-${postId}" class="likers-link">
+          Liked by ${post.likes} ${post.likes === 1 ? 'person' : 'people'}
+        </button>
+      ` : ''}
     </div>
-<div id="comment-box-${postId}" class="comment-box" style="display:none;">
-      <input type="text" 
-        id="comment-input-${postId}" 
-        placeholder="Write a comment...">
-  
-    <div style="display: flex; gap: 10px;">
-      <button onclick="addComment('${postId}')">Post Comment</button>
-      <button onclick="toggleCommentBox('${postId}')">Cancel</button>
+`;      
+      
+
+
+  html += `
+    
+
+        <!-- Comment Input Box - Lighter -->
+    <div id="comment-box-${postId}" class="comment-input-box" style="display: none;">
+      <textarea id="comment-input-${postId}" placeholder="Write a comment..."></textarea>
+      <div style="margin-top: 12px; text-align: right;">
+        <button onclick="addComment('${postId}')">Post Comment</button>
+      </div>
     </div>
-</div>
-    <div id="comments-${postId}" class="comments"></div>
+
+    <!-- Comments Display Area -->
+    <div id="comments-${postId}" class="comments-container"></div>
   `;
 
   postEl.innerHTML = html;
+
+  postEl.innerHTML = html;
+
+// Add Delete "X" button in top-right corner
+const deleteX = document.createElement('button');
+deleteX.className = 'post-delete-x';
+deleteX.innerHTML = '✕';
+deleteX.title = 'Delete post';
+deleteX.onclick = (e) => {
+    e.stopPropagation();           // Prevent any parent clicks
+    deletePost(postId);
+};
+
+postEl.style.position = 'relative';   // Important for absolute positioning
+postEl.appendChild(deleteX);
+
+loadCommentsForPost(postId);
   container.prepend(postEl);
+
   loadCommentsForPost(postId);
-}   // ←←← THIS IS THE IMPORTANT CLOSING BRACE
+}
 
 function subscribeToFeed() {
-  if (feedChannel) return;   // prevent duplicate subscriptions
+    if (feedChannel) return; // prevent duplicate subscriptions
 
-  feedChannel = supabaseClient.channel('crew-feed')
-    .on('postgres_changes', { 
-      event: 'INSERT', 
-      schema: 'public', 
-      table: 'posts' 
-    }, (payload) => renderPost(payload.new))
-    .on('postgres_changes', { 
-      event: 'INSERT', 
-      schema: 'public', 
-      table: 'comments' 
-    }, (payload) => loadCommentsForPost(payload.new.post_id))
-    .subscribe((status) => {
-      console.log('Realtime subscription status:', status);
-    });
+    feedChannel = supabaseClient.channel('crew-feed')
+        // New posts (existing)
+        .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'posts'
+        }, (payload) => {
+            console.log('New post inserted:', payload);
+            renderPost(payload.new);
+        })
+
+        // Likes / Unlikes → when posts.likes changes
+        .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'posts',
+            filter: 'likes=gt.0'   // optional: only if likes > 0
+        }, (payload) => {
+            console.log('Post updated (likes changed):', payload);
+            refreshSinglePost(payload.new.id);   // We'll define this below
+        })
+
+        // Optional: Listen directly to post_likes for more reliability
+        .on('postgres_changes', {
+            event: '*',                    // INSERT, UPDATE, DELETE
+            schema: 'public',
+            table: 'post_likes'
+        }, (payload) => {
+            console.log('post_likes changed:', payload);
+            if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
+                refreshSinglePost(payload.new?.post_id || payload.old?.post_id);
+            }
+        })
+
+        .subscribe((status) => {
+            console.log('Realtime subscription status:', status);
+        });
 }
 
 // ====================== MOBILE MENU ======================
@@ -238,7 +354,6 @@ function initMobileMenu() {
 document.addEventListener('DOMContentLoaded', () => {
   initMobileMenu();
 });
-
 
 // ====================== MEMBERS FUNCTIONS ======================
 async function loadMembers() {
@@ -337,14 +452,17 @@ async function loadFeed(sortBy = 'latest') {
   currentSort = sortBy;
   const container = document.getElementById('feedContainer');
   if (!container) return;
+
   container.innerHTML = '<p>Loading feed...</p>';
 
   let query = supabaseClient.from('posts').select('*');
+
   if (sortBy === 'latest') query = query.order('created_at', { ascending: true });
   else if (sortBy === 'oldest') query = query.order('created_at', { ascending: false });
   else if (sortBy === 'popular') query = query.order('likes', { ascending: true });
 
   const { data, error } = await query;
+
   container.innerHTML = '';
 
   if (error) {
@@ -352,11 +470,24 @@ async function loadFeed(sortBy = 'latest') {
     container.innerHTML = `<p>Error loading feed</p>`;
     return;
   }
+
   if (!data || data.length === 0) {
     container.innerHTML = `<p>No posts yet. Be the first!</p>`;
     return;
   }
+
+  // Render all posts
   data.forEach(renderPost);
+
+  // Re-load comments for ALL visible posts after rendering
+  setTimeout(() => {
+    document.querySelectorAll('.card').forEach(card => {
+      const postId = card.dataset.postId;
+      if (postId) {
+        loadCommentsForPost(postId);
+      }
+    });
+  }, 100);
 }
 
 function changeSort() {
@@ -364,61 +495,235 @@ function changeSort() {
   loadFeed(sortBy);
 }
 
-async function toggleLike(postId) {
-  const likedKey = `liked_${postId}`;
-  if (localStorage.getItem(likedKey)) {
-    alert("You already liked this post!");
-    return;
-  }
-
-  const { data: current } = await supabaseClient
-    .from('posts')
-    .select('likes')
-    .eq('id', postId)
-    .single();
-
-  const newLikes = (current?.likes || 0) + 1;
-
-  const { error } = await supabaseClient
-    .from('posts')
-    .update({ likes: newLikes })
-    .eq('id', postId);
-
-  if (!error) {
-    localStorage.setItem(likedKey, 'true');
-    const countEl = document.getElementById(`like-count-${postId}`);
-    if (countEl) {
-      countEl.textContent = newLikes;
-      countEl.classList.add('like-pop');
-      setTimeout(() => countEl.classList.remove('like-pop'), 600);
+// ====================== SHOW WHO LIKED THE POST (Fixed Version) ======================
+async function showLikers(postId) {
+    if (!currentUser) {
+        return alert("You must be logged in to see who liked this post.");
     }
-  }
+
+    try {
+        // Step 1: Get all likes for this post
+        const { data: likesData, error: likesError } = await supabaseClient
+            .from('post_likes')
+            .select('user_id')
+            .eq('post_id', postId);
+
+        if (likesError) throw likesError;
+        if (!likesData || likesData.length === 0) {
+            return alert("No one has liked this post yet.");
+        }
+
+        // Step 2: Get the full names from members table using the user_ids
+        const userIds = likesData.map(like => like.user_id);
+
+        const { data: membersData, error: membersError } = await supabaseClient
+            .from('members')
+            .select('full_name')
+            .in('id', userIds);
+
+        if (membersError) throw membersError;
+
+        // Build the list of names
+        const names = membersData
+            .map(member => member.full_name || "Unknown Crew Member")
+            .filter(name => name.trim() !== "")
+            .join("\n• ");
+
+        if (names) {
+            alert(`❤️ Liked by:\n\n• ${names}`);
+        } else {
+            alert(`This post has ${likesData.length} like(s), but names could not be loaded.`);
+        }
+
+    } catch (err) {
+        console.error("Likers error:", err);
+        alert("Could not load likers.\n\nCheck browser console (F12) for details.");
+    }
 }
 
+window.showLikers = showLikers;
+
+// Refresh only one post's like count
+async function refreshSinglePost(postId) {
+    if (!postId) return;
+
+    try {
+        const { data: post, error } = await supabaseClient
+            .from('posts')
+            .select('likes')
+            .eq('id', postId)
+            .single();
+
+        if (error) throw error;
+
+        const count = post.likes || 0;
+
+        // Update the heart count
+        const countEl = document.getElementById(`like-count-${postId}`);
+        if (countEl) countEl.textContent = count;
+
+        // Update or create the "Liked by" link
+        let likersLink = document.getElementById(`likers-link-${postId}`);
+
+        if (count > 0) {
+            if (likersLink) {
+                // Update existing link
+                likersLink.textContent = `Liked by ${count} ${count === 1 ? 'person' : 'people'}`;
+            } else {
+                // Create new link if it didn't exist before
+                const actionsDiv = document.querySelector(`[data-post-id="${postId}"] .post-actions`);
+                if (actionsDiv) {
+                    const newLink = document.createElement('button');
+                    newLink.id = `likers-link-${postId}`;
+                    newLink.className = 'likers-link';
+                    newLink.textContent = `Liked by ${count} ${count === 1 ? 'person' : 'people'}`;
+                    newLink.onclick = () => showLikers(postId);
+                    actionsDiv.appendChild(newLink);
+                }
+            }
+        } else if (likersLink) {
+            // Remove the link if count becomes 0
+            likersLink.remove();
+        }
+
+    } catch (err) {
+        console.error("Failed to refresh post:", err);
+    }
+}
+
+// ====================== TOGGLE LIKE / UNLIKE ======================
+async function toggleLike(postId) {
+    if (!currentUser) {
+        return alert("You must be logged in to like posts.");
+    }
+
+    try {
+        // Check if user already liked this post
+        const { data: existingLike, error: checkError } = await supabaseClient
+            .from('post_likes')
+            .select('id')
+            .eq('post_id', postId)
+            .eq('user_id', currentUser.id)
+            .maybeSingle();
+
+        if (checkError) throw checkError;
+
+        if (existingLike) {
+            // === UNLIKE ===
+            const { error: deleteError } = await supabaseClient
+                .from('post_likes')
+                .delete()
+                .eq('post_id', postId)
+                .eq('user_id', currentUser.id);
+
+            if (deleteError) throw deleteError;
+
+            localStorage.removeItem(`liked_${postId}`);
+            alert("❤️ Like removed");
+        } else {
+            // === LIKE ===
+            const { error: insertError } = await supabaseClient
+                .from('post_likes')
+                .insert({
+                    post_id: postId,
+                    user_id: currentUser.id
+                });
+
+            if (insertError) throw insertError;
+
+            localStorage.setItem(`liked_${postId}`, 'true');
+            alert("❤️ Liked!");
+        }
+
+        // Refresh the post to update count and heart appearance
+        await refreshSinglePost(postId);
+
+    } catch (err) {
+        console.error("Like/Unlike error:", err);
+        alert("Failed to update like. Please try again.");
+    }
+}
 async function loadCommentsForPost(postId) {
-  const { data, error } = await supabaseClient
-      .from('comments')
-      .select('*')
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true });
+const container = document.getElementById(`comments-${postId}`);
+if (!container) {
+console.warn(`Comments container for post ${postId} not found`);
+return;
+  }
 
-  if (error) return console.error(error);
+const { data, error } = await supabaseClient
+    .from('comments')
+    .select('*')
+    .eq('post_id', postId)
+    .order('created_at', { ascending: true });
 
-  const container = document.getElementById(`comments-${postId}`);
-  if (!container) return;
+if (error) {
+console.error("Error loading comments:", error);
+container.innerHTML = `<p style="color:#ef4444;">Error loading comments</p>`;
+return;
+  }
 
-  container.innerHTML = data.length === 0 ? `<p>No comments yet.</p>` : '';
+if (!data || data.length === 0) {
+container.innerHTML = `<p style="color:#9ca3af; font-style:italic;">No comments yet. Be the first!</p>`;
+return;
+  }
 
-  data.forEach(comment => {
-    const div = document.createElement('div');
-    div.className = 'comment';
-    div.innerHTML = `
-      <strong>${comment.full_name || 'Crew Member'}</strong> 
-      <small>${new Date(comment.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</small>
-      <br>${comment.content}
+container.innerHTML = '';
+data.forEach(comment => {
+const div = document.createElement('div');
+div.className = 'comment';
+div.style.position = 'relative';           // Important for absolute X button
+div.style.marginBottom = '12px';
+div.style.padding = '12px 40px 12px 12px'; // Space for the X button
+div.style.borderRadius = '12px';
+div.style.background = 'rgba(255,255,255,0.06)';
+
+div.innerHTML = `
+      <strong>${comment.full_name || 'Crew Member'}</strong>
+      <small style="margin-left: 10px; color: #9ca3af;">${new Date(comment.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</small>
+      <div style="margin-top: 6px; color:#e0f0ff;">${comment.content}</div>
     `;
+
+    // Add Delete "X" for comments (only if it's the user's own comment or admin)
+    if (currentUser && (comment.user_id === currentUser.id)) {   // You can expand this for admins later
+        const deleteX = document.createElement('button');
+        deleteX.className = 'comment-delete-x';
+        deleteX.innerHTML = '✕';
+        deleteX.title = 'Delete comment';
+        deleteX.onclick = (e) => {
+            e.stopPropagation();
+            deleteComment(comment.id, postId);
+        };
+        div.appendChild(deleteX);
+    }
+
     container.appendChild(div);
   });
+}
+
+// Helper to get current user's full name from members table
+async function getCurrentUserFullName() {
+  if (!currentUser) return "Crew Member";
+
+  try {
+    const { data: member, error } = await supabaseClient
+      .from('members')
+      .select('full_name')
+      .eq('id', currentUser.id)
+      .single();
+
+    if (error) {
+      console.warn("Could not fetch full name, using email instead");
+      return currentUser.email ? currentUser.email.split('@')[0] : "Crew Member";
+    }
+
+    return member?.full_name && member.full_name.trim() !== ''
+      ? member.full_name.trim()
+      : (currentUser.email ? currentUser.email.split('@')[0] : "Crew Member");
+
+  } catch (err) {
+    console.error("Error fetching full name:", err);
+    return currentUser.email ? currentUser.email.split('@')[0] : "Crew Member";
+  }
 }
 
 async function voteOnPoll(postId, option) {
@@ -441,42 +746,58 @@ async function voteOnPoll(postId, option) {
 
 async function addComment(postId) {
   const input = document.getElementById(`comment-input-${postId}`);
-  const content = input.value.trim();
+  const content = input ? input.value.trim() : '';
 
-  if (!content || !currentUser) {
-    return alert("You must be logged in to comment.");
+  if (!content) {
+    return alert("Please enter a comment.");
   }
 
-  // Get the member's full name from the members table
-  const { data: member, error: memberError } = await supabaseClient
-    .from('members')
-    .select('full_name')
-    .eq('id', currentUser.id)
-    .single();
+  // Better check for currentUser
+  if (!currentUser) {
+    console.error("currentUser is null");
+    return alert("You must be logged in to comment. Please refresh the page.");
+  }
 
-  const displayName = member?.full_name && member.full_name.trim() !== '' 
-                    ? member.full_name 
-                    : (currentUser.email ? currentUser.email.split('@')[0] : 'Crew Member');
+  console.log("Current user for comment:", currentUser.id); // Debug line
 
-  const { error } = await supabaseClient.from('comments').insert({
-    post_id: postId,
-    user_id: currentUser.id,
-    full_name: displayName,           // ← Now uses full name
-    content: content
-  });
+  try {
+    // Get full name
+    const { data: member, error: memberError } = await supabaseClient
+      .from('members')
+      .select('full_name')
+      .eq('id', currentUser.id)
+      .single();
 
-  if (!error) {
-    input.value = '';
-    loadCommentsForPost(postId);
-  } else {
-    console.error(error);
-    alert("Failed to post comment: " + error.message);
+    const displayName = member?.full_name && member.full_name.trim() !== ''
+      ? member.full_name.trim()
+      : (currentUser.email ? currentUser.email.split('@')[0] : 'Crew Member');
+
+    const { error } = await supabaseClient.from('comments').insert({
+      post_id: postId,
+      user_id: currentUser.id,
+      full_name: displayName,
+      content: content
+    });
+
+    if (error) {
+      console.error("Comment insert error:", error);
+      alert("Failed to post comment: " + error.message);
+    } else {
+      input.value = '';
+      loadCommentsForPost(postId);
+      alert("✅ Comment posted!");
+    }
+  } catch (err) {
+    console.error("Error posting comment:", err);
+    alert("An error occurred while posting comment.");
   }
 }
 
 function toggleCommentBox(postId) {
   const box = document.getElementById(`comment-box-${postId}`);
-  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  if (box) {
+    box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
+  }
 }
 
 //////////////POLL MODAL FUNCTIONS ///////////////////////
@@ -528,9 +849,11 @@ async function createPoll() {
   if (!question) return alert("Please enter a poll question.");
   if (validOptions.length < 2) return alert("Please add at least 2 options.");
 
+  const displayName = await getCurrentUserFullName();
+
   const { error } = await supabaseClient.from('posts').insert({
     user_id: currentUser.id,
-    full_name: currentUser.email ? currentUser.email.split('@')[0] : 'Crew Member',
+    full_name: displayName,                    // ← Full name
     content: question,
     post_type: 'poll',
     poll_options: validOptions,
@@ -546,32 +869,50 @@ async function createPoll() {
     loadFeed(currentSort);
   }
 }
-///////////////////////////////////
 
 
+// ====================== EVENT FUNCTIONS ======================
 function showEventModal() {
-  document.getElementById('eventModal').style.display = 'flex';
+  const modal = document.getElementById('eventModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    // Clear form when opening
+    document.getElementById('eventTitle').value = '';
+    document.getElementById('eventDate').value = '';
+    document.getElementById('eventLocation').value = '';
+    document.getElementById('eventDesc').value = '';
+  }
 }
 
 function hideEventModal() {
-  document.getElementById('eventModal').style.display = 'none';
+  const modal = document.getElementById('eventModal');
+  if (modal) modal.style.display = 'none';
 }
 
+// ====================== CREATE EVENT ======================
 async function createEvent() {
-  if (!currentUser) return alert("You must be logged in.");
-  const title = document.getElementById('eventTitle').value.trim();
-  const dateStr = document.getElementById('eventDate').value;
-  const location = document.getElementById('eventLocation').value.trim();
+  if (!currentUser) {
+    return alert("You must be logged in to schedule events.");
+  }
+
+  const title       = document.getElementById('eventTitle').value.trim();
+  const dateInput   = document.getElementById('eventDate').value;
+  const location    = document.getElementById('eventLocation').value.trim();
   const description = document.getElementById('eventDesc').value.trim();
 
-  if (!title) return alert("Event title is required.");
-  if (!dateStr) return alert("Please select a date and time.");
+  if (!title)     return alert("Event title is required.");
+  if (!dateInput) return alert("Please select a date and time.");
 
-  const eventDate = new Date(dateStr);
+  const eventDate = new Date(dateInput);
+  if (isNaN(eventDate.getTime())) {
+    return alert("Invalid date and time selected.");
+  }
+
+  const displayName = await getCurrentUserFullName();
 
   const { error } = await supabaseClient.from('posts').insert({
     user_id: currentUser.id,
-    full_name: currentUser.email ? currentUser.email.split('@')[0] : 'Crew Member',
+    full_name: displayName,                    // ← Full name
     content: description || null,
     post_type: 'event',
     event_title: title,
@@ -581,15 +922,16 @@ async function createEvent() {
     likes: 0
   });
 
-  if (error) alert("Failed to create event: " + error.message);
-  else {
+  if (error) {
+    console.error(error);
+    alert("Failed to schedule event: " + error.message);
+  } else {
     hideEventModal();
-    document.getElementById('eventTitle').value = '';
-    document.getElementById('eventDate').value = '';
-    document.getElementById('eventLocation').value = '';
-    document.getElementById('eventDesc').value = '';
     alert("✅ Event scheduled successfully!");
-    loadFeed(currentSort);
+
+    if (document.getElementById('feedContainer')) {
+      loadFeed(currentSort);
+    }
   }
 }
 
@@ -704,21 +1046,15 @@ async function logout() {
 async function loadUser() {
   try {
     const { data: { user }, error } = await supabaseClient.auth.getUser();
-    
-    if (error) {
+    if (error || !user) {
       console.error("Auth error:", error);
       currentUser = null;
       return;
     }
 
     currentUser = user;
-    console.log("Current user loaded:", currentUser?.email); // Helpful for debugging
+    console.log("✅ Current user loaded successfully:", currentUser.id, currentUser.email);
 
-    // Update any UI that shows user name if needed
-    const nameEl = document.getElementById('fullName'); // or whatever displays user name
-    if (nameEl && user) {
-      nameEl.textContent = user.email ? user.email.split('@')[0] : "Crew Member";
-    }
   } catch (err) {
     console.error("Error loading user:", err);
     currentUser = null;
@@ -750,27 +1086,25 @@ function setupImagePreview() {
     });
 }
 
+// ====================== CREATE TEXT POST ======================
 async function createTextPost() {
   if (!currentUser) return alert("You must be logged in to post.");
 
   const content = document.getElementById('postContent').value.trim();
   const imageUrls = [];
 
+  // Handle image uploads
   if (selectedFiles.length > 0) {
     for (let file of selectedFiles) {
       const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${file.name.split('.').pop()}`;
-
+      
       const { error: uploadError } = await supabaseClient.storage
         .from('post-images')
-        .upload(fileName, file, { 
-          cacheControl: '3600', 
-          upsert: false 
-        });
+        .upload(fileName, file, { cacheControl: '3600', upsert: false });
 
       if (uploadError) {
         console.error("Upload error:", uploadError);
-        alert("Image upload failed: " + uploadError.message);
-        return;
+        return alert("Image upload failed: " + uploadError.message);
       }
 
       const { data: urlData } = supabaseClient.storage
@@ -779,17 +1113,16 @@ async function createTextPost() {
 
       if (urlData?.publicUrl) {
         imageUrls.push(urlData.publicUrl);
-        console.log("✅ Image uploaded successfully:", urlData.publicUrl);
-      } else {
-        alert("Failed to generate public URL.");
-        return;
       }
     }
   }
 
+  // ←←← THIS WAS THE MISSING PART
+  const displayName = await getCurrentUserFullName();
+
   const { error } = await supabaseClient.from('posts').insert({
     user_id: currentUser.id,
-    full_name: currentUser.email ? currentUser.email.split('@')[0] : 'Crew Member',
+    full_name: displayName,                    // Now correctly uses full name
     content: content || null,
     post_type: 'text',
     image_urls: imageUrls.length ? imageUrls : null,
@@ -799,10 +1132,12 @@ async function createTextPost() {
   if (error) {
     alert("Post failed: " + error.message);
   } else {
+    // Clear form
     document.getElementById('postContent').value = '';
     document.getElementById('imageUpload').value = '';
     document.getElementById('imagePreview').innerHTML = '';
     selectedFiles = [];
+
     alert("Post shared successfully!");
     loadFeed(currentSort);
   }
@@ -1150,6 +1485,19 @@ if (document.getElementById('feedContainer')) {
       if (createPollBtn) createPollBtn.addEventListener('click', createPoll);
       if (addPollOptionBtn) addPollOptionBtn.addEventListener('click', addPollOption);
     }
+
+    // Event Modal Listeners
+// ====================== EVENT MODAL LISTENERS ======================
+const eventModal = document.getElementById('eventModal');
+if (eventModal) {
+  const closeEventModal = document.getElementById('closeEventModal');
+  const cancelEventBtn  = document.getElementById('cancelEventBtn');
+  const createEventBtn  = document.getElementById('createEventBtn');
+
+  if (closeEventModal) closeEventModal.addEventListener('click', hideEventModal);
+  if (cancelEventBtn)  cancelEventBtn.addEventListener('click', hideEventModal);
+  if (createEventBtn)  createEventBtn.addEventListener('click', createEvent);
+}
   }
   // ====================== GOLF LEADERBOARD PAGE SETUP (Fixed - Independent) ======================
 if (document.getElementById('leaderboardBody')) {
@@ -1170,6 +1518,7 @@ if (document.getElementById('leaderboardBody')) {
             }, 30000);
         }
     }, 300);
+
 }
 
   // ====================== CALENDAR PAGE SETUP ======================
@@ -1193,6 +1542,7 @@ if (document.getElementById('leaderboardBody')) {
     });
   }
 });
+
 // ================================================
 // GOLF PAGE GLOBAL FUNCTIONS (Must be outside DOMContentLoaded)
 // ================================================

@@ -162,7 +162,8 @@ body {
   font-weight: 500;
   font-size: 1rem;
   transition: background 0.25s ease;
-  text-align: left;              /* Keeps text aligned consistently */
+  text-align: left; 
+  text-indent: 10%;             /* Keeps text aligned consistently */
 }
 
 /* Subtle hover - no indent, no teal */
@@ -1264,3 +1265,199 @@ td {
 .add-team-btn { background: #00C7B2; color: white; }
 .refresh-btn { background: #374151; color: white; }
 
+/* ==================== POST DELETE X BUTTON - Mobile Friendly ==================== */
+.post-delete-x {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    border: 2px solid rgba(0, 199, 178, 0.6);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.25s ease;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    
+    /* Always visible on mobile, hover only on desktop */
+    opacity: 1;
+}
+
+/* Desktop: Hide until hover */
+@media (hover: hover) and (min-width: 769px) {
+    .post-delete-x {
+        opacity: 0;
+        pointer-events: none;
+    }
+    
+    .card:hover .post-delete-x {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+.post-delete-x:hover {
+    background: #00C7B2;
+    color: #ffffff;
+    border-color: #00C7B2;
+    transform: scale(1.08);
+    box-shadow: 0 4px 12px rgba(0, 199, 178, 0.5);
+}
+
+.post-delete-x:active {
+    transform: scale(0.92);
+    background: #00a895;
+}
+
+/* ==================== COMMENT DELETE X BUTTON - Mobile Friendly ==================== */
+.comment-delete-x {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    border: 2px solid rgba(0, 199, 178, 0.6);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.25s ease;
+    z-index: 5;
+    
+    /* Always visible on mobile */
+    opacity: 1;
+}
+
+/* Desktop only: Hide until hover */
+@media (hover: hover) and (min-width: 769px) {
+    .comment-delete-x {
+        opacity: 0;
+        pointer-events: none;
+    }
+    
+    .comment:hover .comment-delete-x {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+.comment-delete-x:hover {
+    background: #00C7B2;
+    color: white;
+    border-color: #00C7B2;
+    transform: scale(1.1);
+}
+
+.comment-delete-x:active {
+    transform: scale(0.9);
+    background: #00a895;
+
+}
+/* ==================== COMMENT INPUT BOX - Updated Teal/Green Theme ==================== */
+.comment-input-box {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 2px solid rgba(0, 199, 178, 0.4) !important;
+    border-radius: 16px !important;
+    padding: 18px !important;
+    margin-top: 12px !important;
+    margin-bottom: 18px !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25) !important;
+    transition: all 0.3s ease;
+}
+
+.comment-input-box:hover {
+    border-color: #00C7B2 !important;
+    background: rgba(255, 255, 255, 0.10) !important;
+    box-shadow: 0 6px 20px rgba(0, 199, 178, 0.2) !important;
+}
+
+.comment-input-box textarea {
+    width: 100% !important;
+    height: 100px !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: #ffffff !important;
+    border: 2px solid rgba(0, 199, 178, 0.3) !important;
+    border-radius: 12px !important;
+    padding: 14px 16px !important;
+    font-size: 1.02rem !important;
+    resize: vertical !important;
+    line-height: 1.5 !important;
+    font-family: inherit !important;
+    transition: all 0.25s ease;
+}
+
+.comment-input-box textarea:focus {
+    border-color: #00C7B2 !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 0 0 4px rgba(0, 199, 178, 0.25) !important;
+    outline: none;
+}
+
+.comment-input-box button {
+    background: #00C7B2 !important;
+    color: #124352 !important;
+    border: none !important;
+    padding: 12px 26px !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+    font-size: 1rem !important;
+    cursor: pointer !important;
+    transition: all 0.25s ease;
+    margin-top: 8px;
+}
+
+.comment-input-box button:hover {
+    background: #ffffff !important;
+    color: #124352 !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(0, 199, 178, 0.4) !important;
+}
+
+.comment-input-box button:active {
+    transform: scale(0.96) !important;
+}
+.likers-link {
+    background: none;
+    border: none;
+    color: #00C7B2;
+    font-size: 0.95rem;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.likers-link:hover {
+    background: rgba(0, 199, 178, 0.15);
+    color: #ffffff;
+}
+.comments-container {
+    margin-top: 5px !important;     /* This creates the gap you want */
+    padding-top: 5px !important;
+    border-top: 1px solid rgba(0, 199, 178, 0.15) !important;
+}
+
+/* Optional: Make it even cleaner on mobile */
+@media (max-width: 768px) {
+    .post-actions {
+        margin-bottom: 10px !important;
+    }
+    
+    .comments-container {
+        margin-top: 10px !important;
+    }
+}
