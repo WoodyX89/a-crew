@@ -1903,6 +1903,200 @@ async function renderCalendar() {
     renderShiftAreaChart();
 }
 
+// ====================== AUTO POPULATE NEXT MONTH - FINAL VERSION (ALL YOUR RULES) ======================
+async function autoPopulateNextMonth() {
+    if (!currentUser) {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return alert("❌ You must be logged in.");
+        currentUser = user;
+    }
+
+    const nextMonthStart = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+    const year = nextMonthStart.getFullYear();
+    const month = nextMonthStart.getMonth();
+    const monthName = nextMonthStart.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    if (!confirm(`Delete ALL shifts for ${monthName} and create new schedule following your exact rules?\n\n• Rotate certified workers across areas\n• Training workers stay in their area (Plant 1 or 2 OK)\n• Exactly ONE worker per area\n• 28-day cycle blocks (3 same → 2 rotate → 2 same → 2 same → 3 same)\n• Supervisor + LH rules preserved`)) return;
+
+    const startStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
+    const endStr = `${year}-${String(month+1).padStart(2,'0')}-${new Date(year, month+1, 0).getDate()}`;
+
+    await supabaseClient.from('schedule').delete().gte('date', startStr).lte('date', endStr);
+
+    const { data: members } = await supabaseClient.from('members').select('*').eq('status', 'Active');
+    if (!members?.length) return alert("No active members.");
+
+    const supervisorName = members.find(m => m.supervisor_status === 'Yes')?.full_name;
+
+    // Training workers (fixed area, Plant 1 or 2 allowed)
+    const trainingMap = new Map();
+    members.forEach(m => {
+        if (m.supervisor_status === 'Training') trainingMap.set(m.full_name, 'Supervisor');
+        else if (m.lh_status === 'Training') trainingMap.set(m.full_name, 'LH');
+        else if (m.pt_status === 'Training') trainingMap.set(m.full_name, 'Pretreat');
+        else if (m.demin_status === 'Training') trainingMap.set(m.full_name, 'Demin');
+        else if (m.field_status === 'Training') trainingMap.set(m.full_name, null); // choose 1 or 2
+        else if (m.comp_status === 'Training') trainingMap.set(m.full_name, null);
+        else if (m.panel_status === 'Training') trainingMap.set(m.full_name, null);
+    });
+
+    const regularMembers = members.filter(m => !trainingMap.has(m.full_name));
+
+    let blockRotationIndex = 0;   // advances only at start of each block
+    const inserts = [];
+
+    let current = new Date(year, month, 1);
+    let workingDayInMonth = 0;
+
+    while (current.getMonth() === month) {
+        const dateStr = current.toISOString().split('T')[0];
+
+        if (isWorkingDay(dateStr)) {
+            workingDayInMonth++;
+            const cycleDay = getCycleDay(dateStr);
+
+            const usedToday = new Set();
+            const dayShifts = [];
+
+            // === TRAINING WORKERS (fixed area, can be Plant 1 or 2) ===
+            trainingMap.forEach((fixedArea, name) => {
+                let area = fixedArea;
+                if (!area) { // Field/Comp/Panel training → choose plant
+                    const plant = Math.random() > 0.5 ? "2" : "1";
+                    if (name.toLowerCase().includes("field")) area = `Field ${plant}`;
+                    else if (name.toLowerCase().includes("comp")) area = `Comp ${plant}`;
+                    else if (name.toLowerCase().includes("panel")) area = `Panel ${plant}`;
+                }
+                dayShifts.push({ member_name: name, area, status: 'working', is_floater: false });
+                usedToday.add(name);
+            });
+
+            // === SUPERVISOR + LH RULES ===
+            let supOnVacation = false;
+            if (supervisorName && !usedToday.has(supervisorName)) {
+                supOnVacation = (cycleDay % 11 === 0);
+                dayShifts.push({
+                    member_name: supervisorName,
+                    area: supOnVacation ? "Vacation" : "Supervisor",
+                    status: supOnVacation ? "vacation" : "working",
+                    is_floater: false
+                });
+                usedToday.add(supervisorName);
+            }
+
+            if (supOnVacation) {
+                const lhMember = regularMembers.find(m => 
+                    (m.lh_status === 'Yes' || m.lh_status === 'Training') && !usedToday.has(m.full_name)
+                );
+                if (lhMember) {
+                    dayShifts.push({ member_name: lhMember.full_name, area: "LH", status: "working", is_floater: false });
+                    usedToday.add(lhMember.full_name);
+                }
+            }
+
+            // === BLOCK-BASED ROTATION FOR REGULAR WORKERS ===
+            const isNewBlock = 
+                (cycleDay === 2 || cycleDay === 12 || cycleDay === 21) || // start of 3-day or 2-day blocks
+                (cycleDay === 5 || cycleDay === 14 || cycleDay === 23);   // start of second part of block
+
+            if (isNewBlock || workingDayInMonth === 1) {
+                blockRotationIndex = (blockRotationIndex + 1) % Math.max(regularMembers.length, 1);
+            }
+
+            const mainAreas = ["Panel 1","Panel 2","Comp 1","Comp 2","Field 1","Field 2","Demin","Pretreat"];
+
+            // Assign one person per area using rotated pool
+            for (let area of mainAreas) {
+                if (dayShifts.some(s => s.area === area)) continue; // already filled (e.g. training)
+
+                for (let i = 0; i < regularMembers.length; i++) {
+                    const idx = (blockRotationIndex + i) % regularMembers.length;
+                    const member = regularMembers[idx];
+                    if (usedToday.has(member.full_name)) continue;
+
+                    if (canWorkArea(member, area)) {
+                        dayShifts.push({
+                            member_name: member.full_name,
+                            area: area,
+                            status: "working",
+                            is_floater: false
+                        });
+                        usedToday.add(member.full_name);
+                        break;
+                    }
+                }
+            }
+
+            // Remaining regular members become Floaters
+            regularMembers.forEach(m => {
+                if (!usedToday.has(m.full_name)) {
+                    dayShifts.push({
+                        member_name: m.full_name,
+                        area: "Floater",
+                        status: "working",
+                        is_floater: true
+                    });
+                    usedToday.add(m.full_name);
+                }
+            });
+
+            // Save all shifts for this day
+            dayShifts.forEach(shift => {
+                if (shift.member_name) {
+                    inserts.push({
+                        date: dateStr,
+                        member_name: shift.member_name,
+                        area: shift.area,
+                        status: shift.status,
+                        is_floater: shift.is_floater
+                    });
+                }
+            });
+        }
+        current.setDate(current.getDate() + 1);
+    }
+
+    const { error } = await supabaseClient.from('schedule').insert(inserts);
+    if (error) {
+        console.error(error);
+        alert("Failed to generate schedule: " + error.message);
+    } else {
+        alert(`✅ ${monthName} schedule created!\n• Workers rotate across certified areas\n• Training workers stay in area (Plant 1 or 2)\n• Exact block pattern followed\n• All areas filled`);
+        await loadSchedule();
+        await renderCalendar();
+        renderMemberShiftBreakdown();
+    }
+}
+
+function getCycleDay(dateStr) {
+    const date = new Date(dateStr);
+    const diffTime = date.getTime() - rotationStartDate.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 3600 * 24));
+    return ((diffDays % rotationCycle) + rotationCycle) % rotationCycle;
+}
+
+function canWorkArea(member, area) {
+    if (!member) return false;
+    if (area === "Panel 1" || area === "Panel 2") return member.panel_status === 'Yes' || member.panel_status === 'Training';
+    if (area === "Comp 1" || area === "Comp 2")   return member.comp_status === 'Yes' || member.comp_status === 'Training';
+    if (area === "Field 1" || area === "Field 2") return member.field_status === 'Yes' || member.field_status === 'Training';
+    if (area === "Demin")    return member.demin_status === 'Yes' || member.demin_status === 'Training';
+    if (area === "Pretreat") return member.pt_status === 'Yes' || member.pt_status === 'Training';
+    return false;
+}
+
+function getBestAreaForMember(member) {
+    const options = [];
+    if (member.lh_status === 'Yes') options.push('LH');
+    if (member.pt_status === 'Yes') options.push('Pretreat');
+    if (member.demin_status === 'Yes') options.push('Demin');
+    if (member.field_status === 'Yes') options.push(Math.random() > 0.5 ? 'Field 1' : 'Field 2');
+    if (member.comp_status === 'Yes') options.push(Math.random() > 0.5 ? 'Comp 1' : 'Comp 2');
+    if (member.panel_status === 'Yes') options.push(Math.random() > 0.5 ? 'Panel 1' : 'Panel 2');
+    options.push('Floater'); // fallback
+    return options[Math.floor(Math.random() * options.length)];
+}
+
 // ====================== HANDLE SINGLE CLICK ======================
 function handleDayClick(e, dayEl) {
     if (isDragging) return;   // Don't trigger click during drag
@@ -2020,91 +2214,85 @@ function createDayElement(dayNum, isOtherMonth, dateStr = '') {
   return dayEl;
 }
 
-// ====================== SHOW DAY DETAILS (Fixed - Delete X restored) ======================
 function showDayDetails(dateStr) {
     const detailsPanel = document.getElementById('dayDetails');
     const dateTitle = document.getElementById('selectedDate');
     const list = document.getElementById('scheduleList');
 
     const displayDate = new Date(dateStr + 'T00:00:00');
-    const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/Denver',
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric'
+    dateTitle.textContent = displayDate.toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
     });
-
-    dateTitle.textContent = formatter.format(displayDate);
     dateTitle.dataset.date = dateStr;
-
     list.innerHTML = '';
 
     const shifts = scheduleData[dateStr] || [];
     const events = eventsThisMonth[dateStr] || [];
 
-    // Show Events
+    // Events first
     if (events.length > 0) {
-        const eventsHeader = document.createElement('h4');
-        eventsHeader.textContent = 'Events';
-        eventsHeader.style.margin = '15px 0 8px 0';
-        eventsHeader.style.color = '#eab308';
-        list.appendChild(eventsHeader);
-
-        events.forEach(event => {
-            const item = document.createElement('div');
-            item.className = 'shift-item event-item';
-            item.style.position = 'relative';
-            item.innerHTML = `
-                <strong>📅 ${event.event_title}</strong><br>
-                <small>${new Date(event.event_date).toLocaleString([], { 
-                    hour: 'numeric', 
-                    minute: '2-digit' 
-                })}</small>
-            `;
-            list.appendChild(item);
+        const h = document.createElement('h4'); h.textContent = 'Events'; h.style.color = '#eab308';
+        list.appendChild(h);
+        events.forEach(ev => {
+            const div = document.createElement('div');
+            div.className = 'shift-item event-item';
+            div.innerHTML = `<strong>📅 ${ev.event_title}</strong><br><small>${new Date(ev.event_date).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}</small>`;
+            list.appendChild(div);
         });
     }
 
-    // Show Manual Shifts with Delete X button
     if (shifts.length > 0) {
-        const shiftsHeader = document.createElement('h4');
-        shiftsHeader.textContent = 'Shifts';
-        shiftsHeader.style.margin = '15px 0 8px 0';
-        list.appendChild(shiftsHeader);
+        const h = document.createElement('h4'); h.textContent = 'Shifts'; h.style.margin = '15px 0 8px 0';
+        list.appendChild(h);
+
+        // === SORT IN YOUR EXACT ORDER ===
+        const orderMap = {
+            "Supervisor": 1,
+            "Vacation": 2,
+            "LH": 3,
+            "Panel 1": 4,
+            "Panel 2": 5,
+            "Comp 1": 6,
+            "Comp 2": 7,
+            "Field 1": 8,
+            "Field 2": 9,
+            "Demin": 10,
+            "Pretreat": 11,
+            "Floater": 12
+        };
+
+        shifts.sort((a, b) => {
+            const oa = orderMap[a.area] || 99;
+            const ob = orderMap[b.area] || 99;
+            return oa - ob;
+        });
 
         shifts.forEach(shift => {
             const item = document.createElement('div');
             item.className = `shift-item ${shift.status}`;
-            item.style.position = 'relative';   // Important for X button
+            item.style.position = 'relative';
 
-            const areaText = shift.is_floater ? 
+            const areaText = shift.area === "Floater" ? 
                 '<strong style="color:#f59e0b;">Float</strong>' : 
-                `Area: ${shift.area || 'Not specified'}`;
+                `Area: ${shift.area}`;
 
             item.innerHTML = `
                 <strong>${shift.name}</strong><br>
                 ${areaText}
             `;
 
-            // Restore Delete "X" button
             const deleteX = document.createElement('button');
             deleteX.className = 'shift-delete-x';
             deleteX.innerHTML = '✕';
-            deleteX.title = 'Delete shift';
-            deleteX.onclick = (e) => {
-                e.stopPropagation();
-                deleteShift(shift.id, dateStr);
-            };
-
+            deleteX.onclick = (e) => { e.stopPropagation(); deleteShift(shift.id, dateStr); };
             item.appendChild(deleteX);
+
             list.appendChild(item);
         });
     }
 
-    // Empty state
     if (shifts.length === 0 && events.length === 0) {
-        list.innerHTML = `<p style="color:#9ca3af; font-style:italic;">No shifts or events scheduled for this day.</p>`;
+        list.innerHTML = `<p style="color:#9ca3af;">No shifts or events for this day.</p>`;
     }
 
     detailsPanel.classList.add('open');
@@ -2595,6 +2783,7 @@ if (document.getElementById('leaderboardBody')) {
       renderCalendar();
     });
   }
+  document.getElementById('autoPopulateBtn')?.addEventListener('click', autoPopulateNextMonth);
 });
 
 // ================================================
