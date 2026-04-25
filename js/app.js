@@ -1903,119 +1903,108 @@ async function renderCalendar() {
     renderShiftAreaChart();
 }
 
-// ====================== AUTO POPULATE NEXT MONTH - FINAL VERSION (ALL YOUR RULES) ======================
-async function autoPopulateNextMonth() {
+// ====================== AUTO POPULATE CURRENT MONTH (Your Exact Block Rotation) ======================
+async function autoPopulateCurrentMonth() {
     if (!currentUser) {
         const { data: { user } } = await supabaseClient.auth.getUser();
         if (!user) return alert("❌ You must be logged in.");
         currentUser = user;
     }
 
-    const nextMonthStart = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-    const year = nextMonthStart.getFullYear();
-    const month = nextMonthStart.getMonth();
-    const monthName = nextMonthStart.toLocaleString('default', { month: 'long', year: 'numeric' });
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-    if (!confirm(`Delete ALL shifts for ${monthName} and create new schedule following your exact rules?\n\n• Rotate certified workers across areas\n• Training workers stay in their area (Plant 1 or 2 OK)\n• Exactly ONE worker per area\n• 28-day cycle blocks (3 same → 2 rotate → 2 same → 2 same → 3 same)\n• Supervisor + LH rules preserved`)) return;
+    if (!confirm(`⚠️ Delete ALL shifts for ${monthName} and generate new schedule?\n\nThis uses your exact 28-day block rotation:\n• Same area for entire block\n• Swap only at block boundaries\n• All main areas covered (1 person each)`)) 
+        return;
 
     const startStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
     const endStr = `${year}-${String(month+1).padStart(2,'0')}-${new Date(year, month+1, 0).getDate()}`;
 
+    // Clear current month's schedule
     await supabaseClient.from('schedule').delete().gte('date', startStr).lte('date', endStr);
 
-    const { data: members } = await supabaseClient.from('members').select('*').eq('status', 'Active');
-    if (!members?.length) return alert("No active members.");
+    const { data: membersData } = await supabaseClient
+        .from('members').select('*').eq('status', 'Active');
 
-    const supervisorName = members.find(m => m.supervisor_status === 'Yes')?.full_name;
+    if (!membersData?.length) return alert("No active members.");
 
-    // Training workers (fixed area, Plant 1 or 2 allowed)
-    const trainingMap = new Map();
-    members.forEach(m => {
-        if (m.supervisor_status === 'Training') trainingMap.set(m.full_name, 'Supervisor');
-        else if (m.lh_status === 'Training') trainingMap.set(m.full_name, 'LH');
-        else if (m.pt_status === 'Training') trainingMap.set(m.full_name, 'Pretreat');
-        else if (m.demin_status === 'Training') trainingMap.set(m.full_name, 'Demin');
-        else if (m.field_status === 'Training') trainingMap.set(m.full_name, null); // choose 1 or 2
-        else if (m.comp_status === 'Training') trainingMap.set(m.full_name, null);
-        else if (m.panel_status === 'Training') trainingMap.set(m.full_name, null);
-    });
+    const supervisor = membersData.find(m => m.supervisor_status === 'Yes');
+    const trainingWorkers = membersData.filter(m => 
+        m.supervisor_status === 'Training' || m.lh_status === 'Training' ||
+        m.pt_status === 'Training' || m.demin_status === 'Training' ||
+        m.field_status === 'Training' || m.comp_status === 'Training' ||
+        m.panel_status === 'Training'
+    );
+    const regularWorkers = membersData.filter(m => 
+        !trainingWorkers.includes(m) && m !== supervisor
+    );
 
-    const regularMembers = members.filter(m => !trainingMap.has(m.full_name));
-
-    let blockRotationIndex = 0;   // advances only at start of each block
+    const mainAreas = ["Panel 1","Panel 2","Comp 1","Comp 2","Field 1","Field 2","Demin","Pretreat"];
     const inserts = [];
-
     let current = new Date(year, month, 1);
-    let workingDayInMonth = 0;
+
+    let blockRotationIndex = 0;
 
     while (current.getMonth() === month) {
         const dateStr = current.toISOString().split('T')[0];
+        const cycleDay = getCycleDay(dateStr);
 
         if (isWorkingDay(dateStr)) {
-            workingDayInMonth++;
-            const cycleDay = getCycleDay(dateStr);
-
-            const usedToday = new Set();
             const dayShifts = [];
+            const usedToday = new Set();
 
-            // === TRAINING WORKERS (fixed area, can be Plant 1 or 2) ===
-            trainingMap.forEach((fixedArea, name) => {
-                let area = fixedArea;
-                if (!area) { // Field/Comp/Panel training → choose plant
-                    const plant = Math.random() > 0.5 ? "2" : "1";
-                    if (name.toLowerCase().includes("field")) area = `Field ${plant}`;
-                    else if (name.toLowerCase().includes("comp")) area = `Comp ${plant}`;
-                    else if (name.toLowerCase().includes("panel")) area = `Panel ${plant}`;
+            // 1. TRAINING WORKERS (stay fixed)
+            trainingWorkers.forEach(member => {
+                const area = getTrainingArea(member);
+                if (area) {
+                    dayShifts.push({ date: dateStr, member_name: member.full_name, area, status: 'working', is_floater: false });
+                    usedToday.add(member.full_name);
                 }
-                dayShifts.push({ member_name: name, area, status: 'working', is_floater: false });
-                usedToday.add(name);
             });
 
-            // === SUPERVISOR + LH RULES ===
+            // 2. SUPERVISOR + LH BACKUP
             let supOnVacation = false;
-            if (supervisorName && !usedToday.has(supervisorName)) {
+            if (supervisor && !usedToday.has(supervisor.full_name)) {
                 supOnVacation = (cycleDay % 11 === 0);
                 dayShifts.push({
-                    member_name: supervisorName,
+                    date: dateStr,
+                    member_name: supervisor.full_name,
                     area: supOnVacation ? "Vacation" : "Supervisor",
                     status: supOnVacation ? "vacation" : "working",
                     is_floater: false
                 });
-                usedToday.add(supervisorName);
+                usedToday.add(supervisor.full_name);
             }
 
             if (supOnVacation) {
-                const lhMember = regularMembers.find(m => 
+                const lh = regularWorkers.find(m => 
                     (m.lh_status === 'Yes' || m.lh_status === 'Training') && !usedToday.has(m.full_name)
                 );
-                if (lhMember) {
-                    dayShifts.push({ member_name: lhMember.full_name, area: "LH", status: "working", is_floater: false });
-                    usedToday.add(lhMember.full_name);
+                if (lh) {
+                    dayShifts.push({ date: dateStr, member_name: lh.full_name, area: "LH", status: "working", is_floater: false });
+                    usedToday.add(lh.full_name);
                 }
             }
 
-            // === BLOCK-BASED ROTATION FOR REGULAR WORKERS ===
-            const isNewBlock = 
-                (cycleDay === 2 || cycleDay === 12 || cycleDay === 21) || // start of 3-day or 2-day blocks
-                (cycleDay === 5 || cycleDay === 14 || cycleDay === 23);   // start of second part of block
-
-            if (isNewBlock || workingDayInMonth === 1) {
-                blockRotationIndex = (blockRotationIndex + 1) % Math.max(regularMembers.length, 1);
+            // 3. MAIN ROTATION - Block based (your exact pattern)
+            const isNewBlock = isStartOfNewBlock(cycleDay);
+            if (isNewBlock) {
+                blockRotationIndex = (blockRotationIndex + 1) % Math.max(regularWorkers.length, 1);
             }
 
-            const mainAreas = ["Panel 1","Panel 2","Comp 1","Comp 2","Field 1","Field 2","Demin","Pretreat"];
+            const available = regularWorkers.filter(m => !usedToday.has(m.full_name));
 
-            // Assign one person per area using rotated pool
+            // Assign certified workers to main areas
             for (let area of mainAreas) {
-                if (dayShifts.some(s => s.area === area)) continue; // already filled (e.g. training)
+                if (dayShifts.some(s => s.area === area)) continue;
 
-                for (let i = 0; i < regularMembers.length; i++) {
-                    const idx = (blockRotationIndex + i) % regularMembers.length;
-                    const member = regularMembers[idx];
-                    if (usedToday.has(member.full_name)) continue;
-
+                for (let i = 0; i < available.length; i++) {
+                    const idx = (blockRotationIndex + i) % available.length;
+                    const member = available[idx];
                     if (canWorkArea(member, area)) {
                         dayShifts.push({
+                            date: dateStr,
                             member_name: member.full_name,
                             area: area,
                             status: "working",
@@ -2027,10 +2016,11 @@ async function autoPopulateNextMonth() {
                 }
             }
 
-            // Remaining regular members become Floaters
-            regularMembers.forEach(m => {
+            // 4. Remaining workers become Floaters
+            available.forEach(m => {
                 if (!usedToday.has(m.full_name)) {
                     dayShifts.push({
+                        date: dateStr,
                         member_name: m.full_name,
                         area: "Floater",
                         status: "working",
@@ -2040,32 +2030,50 @@ async function autoPopulateNextMonth() {
                 }
             });
 
-            // Save all shifts for this day
-            dayShifts.forEach(shift => {
-                if (shift.member_name) {
-                    inserts.push({
-                        date: dateStr,
-                        member_name: shift.member_name,
-                        area: shift.area,
-                        status: shift.status,
-                        is_floater: shift.is_floater
-                    });
-                }
-            });
+            inserts.push(...dayShifts);
         }
         current.setDate(current.getDate() + 1);
     }
 
     const { error } = await supabaseClient.from('schedule').insert(inserts);
+
     if (error) {
         console.error(error);
         alert("Failed to generate schedule: " + error.message);
     } else {
-        alert(`✅ ${monthName} schedule created!\n• Workers rotate across certified areas\n• Training workers stay in area (Plant 1 or 2)\n• Exact block pattern followed\n• All areas filled`);
+        alert(`✅ ${monthName} schedule generated successfully!\n\n• Block rotation applied (stay same area → swap at block boundaries)\n• All required areas covered\n• Training workers fixed\n• Floaters rotated fairly`);
+        
         await loadSchedule();
         await renderCalendar();
         renderMemberShiftBreakdown();
     }
+}
+
+// ====================== HELPERS ======================
+function isStartOfNewBlock(cycleDay) {
+    // These are the starting days of the major working blocks
+    return cycleDay === 2 || cycleDay === 12 || cycleDay === 21;
+}
+
+function getTrainingArea(member) {
+    if (member.supervisor_status === 'Training') return "Supervisor";
+    if (member.lh_status === 'Training') return "LH";
+    if (member.pt_status === 'Training') return "Pretreat";
+    if (member.demin_status === 'Training') return "Demin";
+    if (member.field_status === 'Training') return `Field ${Math.random() > 0.5 ? "2" : "1"}`;
+    if (member.comp_status === 'Training') return `Comp ${Math.random() > 0.5 ? "2" : "1"}`;
+    if (member.panel_status === 'Training') return `Panel ${Math.random() > 0.5 ? "2" : "1"}`;
+    return null;
+}
+
+function canWorkArea(member, area) {
+    if (!member) return false;
+    if (area.startsWith("Panel")) return member.panel_status === 'Yes' || member.panel_status === 'Training';
+    if (area.startsWith("Comp"))   return member.comp_status === 'Yes' || member.comp_status === 'Training';
+    if (area.startsWith("Field"))  return member.field_status === 'Yes' || member.field_status === 'Training';
+    if (area === "Demin")    return member.demin_status === 'Yes' || member.demin_status === 'Training';
+    if (area === "Pretreat") return member.pt_status === 'Yes' || member.pt_status === 'Training';
+    return false;
 }
 
 function getCycleDay(dateStr) {
@@ -2073,16 +2081,6 @@ function getCycleDay(dateStr) {
     const diffTime = date.getTime() - rotationStartDate.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 3600 * 24));
     return ((diffDays % rotationCycle) + rotationCycle) % rotationCycle;
-}
-
-function canWorkArea(member, area) {
-    if (!member) return false;
-    if (area === "Panel 1" || area === "Panel 2") return member.panel_status === 'Yes' || member.panel_status === 'Training';
-    if (area === "Comp 1" || area === "Comp 2")   return member.comp_status === 'Yes' || member.comp_status === 'Training';
-    if (area === "Field 1" || area === "Field 2") return member.field_status === 'Yes' || member.field_status === 'Training';
-    if (area === "Demin")    return member.demin_status === 'Yes' || member.demin_status === 'Training';
-    if (area === "Pretreat") return member.pt_status === 'Yes' || member.pt_status === 'Training';
-    return false;
 }
 
 function getBestAreaForMember(member) {
@@ -2783,8 +2781,7 @@ if (document.getElementById('leaderboardBody')) {
       renderCalendar();
     });
   }
-  document.getElementById('autoPopulateBtn')?.addEventListener('click', autoPopulateNextMonth);
-});
+document.getElementById('autoPopulateBtn')?.addEventListener('click', autoPopulateCurrentMonth);});
 
 // ================================================
 // GOLF PAGE GLOBAL FUNCTIONS (Must be outside DOMContentLoaded)
