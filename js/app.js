@@ -82,84 +82,107 @@ async function loadMemberChartDropdown() {
         }
     });
 }
-// ====================== MEMBER SHIFT BREAKDOWN (Total, Top Area, Vacation) ======================
+// ====================== ENHANCED CREW OVERVIEW (Percentages by Month + Year + Plant) ======================
 async function renderMemberShiftBreakdown() {
     const container = document.getElementById('memberBreakdownContainer');
     if (!container) return;
 
-    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #9ca3af;">Loading member statistics...</p>';
+    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #9ca3af;">Loading detailed statistics...</p>';
 
-    // Get all members
-    const { data: members, error: memberError } = await supabaseClient
+    const { data: members, error } = await supabaseClient
         .from('members')
         .select('full_name')
         .eq('status', 'Active')
         .order('full_name');
 
-    if (memberError) {
+    if (error || !members) {
         container.innerHTML = '<p style="color:#ef4444;">Error loading members</p>';
         return;
     }
+
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    const monthStart = `${year}-${String(month+1).padStart(2,'0')}-01`;
+    const monthEnd = `${year}-${String(month+1).padStart(2,'0')}-${new Date(year, month+1, 0).getDate()}`;
+    const yearStart = `${year}-01-01`;
 
     container.innerHTML = '';
 
     members.forEach(member => {
         const memberName = member.full_name;
-        let totalShifts = 0;
-        let vacationDays = 0;
-        const areaCounts = {};
+        let monthShifts = [];
+        let yearShifts = [];
 
-        // Count shifts for this member
-        Object.values(scheduleData).forEach(shifts => {
-            shifts.forEach(shift => {
-                if (shift.name === memberName) {
-                    totalShifts++;
+        Object.keys(scheduleData).forEach(dateStr => {
+            const shifts = scheduleData[dateStr] || [];
+            const memberShifts = shifts.filter(s => s.name === memberName);
 
-                    if (shift.status === 'vacation') {
-                        vacationDays++;
-                    } else {
-                        const area = shift.area || "Unknown";
-                        areaCounts[area] = (areaCounts[area] || 0) + 1;
-                    }
-                }
-            });
-        });
-
-        // Find top area
-        let topArea = "—";
-        let maxCount = 0;
-        Object.keys(areaCounts).forEach(area => {
-            if (areaCounts[area] > maxCount) {
-                maxCount = areaCounts[area];
-                topArea = area;
+            if (dateStr >= monthStart && dateStr <= monthEnd) {
+                monthShifts = monthShifts.concat(memberShifts);
+            }
+            if (dateStr >= yearStart) {
+                yearShifts = yearShifts.concat(memberShifts);
             }
         });
 
-        // Create card for this member
+        const monthStats = calculateAreaStats(monthShifts);
+        const yearStats = calculateAreaStats(yearShifts);
+
         const card = document.createElement('div');
         card.style.cssText = `
             background: rgba(255,255,255,0.06);
             border-radius: 16px;
-            padding: 18px;
+            padding: 20px;
             border: 1px solid rgba(0,199,178,0.2);
         `;
 
-        card.innerHTML = `
-            <h4 style="margin: 0 0 12px 0; color: #00C7B2;">${memberName}</h4>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                <span style="color: #a0d8ff;">Total Shifts</span>
-                <strong style="font-size: 1.5rem; color: white;">${totalShifts}</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                <span style="color: #a0d8ff;">Top Area</span>
-                <strong style="color: #eab308;">${topArea}</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between;">
-                <span style="color: #a0d8ff;">Vacation Days</span>
-                <strong style="color: #ef4444;">${vacationDays}</strong>
+        let html = `
+            <h4 style="margin: 0 0 16px 0; color: #00C7B2;">${memberName}</h4>
+            
+            <div style="display: flex; justify-content: space-between; margin-bottom: 16px; gap: 12px;">
+                <div style="text-align:center;">
+                    <span style="color:#a0d8ff; font-size:0.9rem;">THIS MONTH</span><br>
+                    <strong style="font-size:1.8rem; color:white;">${monthStats.totalWorked}</strong>
+                </div>
+                <div style="text-align:center;">
+                    <span style="color:#a0d8ff; font-size:0.9rem;">YEAR TO DATE</span><br>
+                    <strong style="font-size:1.8rem; color:white;">${yearStats.totalWorked}</strong>
+                </div>
+                <div style="text-align:center;">
+                    <span style="color:#ef4444; font-size:0.9rem;">VACATION</span><br>
+                    <strong style="font-size:1.6rem; color:#ef4444;">${yearStats.vacationDays}</strong>
+                </div>
             </div>
         `;
 
+        // This Month Area Percentages
+        html += `<div style="margin-bottom:18px;">
+            <strong style="color:#a0d8ff; font-size:0.95rem;">THIS MONTH AREAS</strong>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">`;
+        Object.keys(monthStats.percentages).forEach(area => {
+            if (monthStats.percentages[area] > 0) {
+                html += `<span style="background:rgba(0,199,178,0.15); color:#e0f0ff; padding:4px 10px; border-radius:9999px; font-size:0.85rem;">
+                    ${area}: <strong>${monthStats.percentages[area]}%</strong>
+                </span>`;
+            }
+        });
+        html += `</div></div>`;
+
+        // Year to Date Area Percentages
+        html += `<div>
+            <strong style="color:#a0d8ff; font-size:0.95rem;">YEAR TO DATE AREAS</strong>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">`;
+        Object.keys(yearStats.percentages).forEach(area => {
+            if (yearStats.percentages[area] > 0) {
+                html += `<span style="background:rgba(0,199,178,0.15); color:#e0f0ff; padding:4px 10px; border-radius:9999px; font-size:0.85rem;">
+                    ${area}: <strong>${yearStats.percentages[area]}%</strong>
+                </span>`;
+            }
+        });
+        html += `</div></div>`;
+
+        card.innerHTML = html;
         container.appendChild(card);
     });
 
@@ -409,6 +432,11 @@ function updateBulkShiftAreas() {
 }
 
 async function applyBulkShift() {
+    const hasPermission = await hasScheduleEditPermission();
+    if (!hasPermission) {
+        hideBulkShiftModal();
+        return alert("❌ Only Supervisors and LH certified members can add bulk shifts.");
+    }
     const memberName = document.getElementById('bulkShiftMember').value.trim();
     const status = document.getElementById('bulkShiftStatus').value;
     let area = "";
@@ -443,7 +471,35 @@ async function applyBulkShift() {
     }
     renderMemberShiftBreakdown();
 }
+// ====================== PERMISSION CHECK - TREVOR WOOD (Full Access) ======================
+async function hasScheduleEditPermission() {
+    if (!currentUser) {
+        await loadUser();   // Make sure user is loaded
+    }
+    if (!currentUser) return false;
 
+    // ✅ YOUR USER ID - Full Access
+    const trevorUserId = "2f461757-567a-4ec7-8c9d-fa97138265e5";
+
+    if (currentUser.id === trevorUserId) {
+        return true;
+    }
+
+    // Normal permission for other Supervisors / LH members
+    try {
+        const { data: member } = await supabaseClient
+            .from('members')
+            .select('supervisor_status, lh_status')
+            .eq('id', currentUser.id)
+            .single();
+
+        return member?.supervisor_status === 'Yes' || 
+               member?.lh_status === 'Yes';
+    } catch (err) {
+        console.error("Permission check failed:", err);
+        return false;
+    }
+}
 // Load events for the current month
 async function loadEventsForMonth(year, month) {
     eventsThisMonth = {};
@@ -984,6 +1040,42 @@ async function loadMembers() {
     setTimeout(addActionListeners, 10);
 }
 
+// ====================== AREA STATS HELPER (Month + Year + Plant Separation) ======================
+function calculateAreaStats(shiftsForMember) {
+    const areaCounts = {
+        "Supervisor": 0, "LH": 0, "Pretreat": 0, "Demin": 0,
+        "Field 1": 0, "Field 2": 0,
+        "Comp 1": 0, "Comp 2": 0,
+        "Panel 1": 0, "Panel 2": 0,
+        "Floater": 0,
+        "Vacation": 0
+    };
+
+    shiftsForMember.forEach(shift => {
+        let key = shift.area || "Unknown";
+        if (areaCounts[key] !== undefined) {
+            areaCounts[key]++;
+        }
+    });
+
+    const totalWorked = Object.keys(areaCounts).reduce((sum, key) => {
+        return (key !== "Vacation") ? sum + areaCounts[key] : sum;
+    }, 0);
+
+    const percentages = {};
+    Object.keys(areaCounts).forEach(key => {
+        if (key !== "Vacation") {
+            percentages[key] = totalWorked > 0 ? Math.round((areaCounts[key] / totalWorked) * 100) : 0;
+        }
+    });
+
+    return {
+        areaCounts,
+        percentages,
+        totalWorked,
+        vacationDays: areaCounts["Vacation"] || 0
+    };
+}
 // Helper function to generate certification badges
 function getCertificationBadges(member) {
     if (!member) return '';
@@ -1650,25 +1742,33 @@ async function logout() {
   window.location.href = 'auth/login.html';
 }
 
-// Replace your current loadUser() with this:
+// ====================== IMPROVED LOAD USER ======================
 async function loadUser() {
-  try {
-    const { data: { user }, error } = await supabaseClient.auth.getUser();
-    if (error || !user) {
-      console.error("Auth error:", error);
-      currentUser = null;
-      return;
+    try {
+        const { data: { user }, error } = await supabaseClient.auth.getUser();
+        
+        if (error) {
+            console.error("Auth error:", error);
+            currentUser = null;
+            return null;
+        }
+
+        if (!user) {
+            console.warn("No user logged in");
+            currentUser = null;
+            return null;
+        }
+
+        currentUser = user;
+        console.log("✅ Current user loaded:", currentUser.id, currentUser.email);
+        return currentUser;
+        
+    } catch (err) {
+        console.error("Error loading user:", err);
+        currentUser = null;
+        return null;
     }
-
-    currentUser = user;
-    console.log("✅ Current user loaded successfully:", currentUser.id, currentUser.email);
-
-  } catch (err) {
-    console.error("Error loading user:", err);
-    currentUser = null;
-  }
 }
-
 function setupImagePreview() {
     const imageInput = document.getElementById('imageUpload');
     const previewContainer = document.getElementById('imagePreview');
@@ -1809,6 +1909,11 @@ async function loadSchedule() {
 
 // ====================== DELETE SHIFT ======================
 async function deleteShift(shiftId, dateStr) {
+    const hasPermission = await hasScheduleEditPermission();
+    if (!hasPermission) {
+        return alert("❌ Only Supervisors and LH certified members can delete shifts.");
+    }
+
     if (!confirm("Delete this shift permanently?")) return;
 
     const { error } = await supabaseClient
@@ -1903,26 +2008,24 @@ async function renderCalendar() {
     renderShiftAreaChart();
 }
 
-// ====================== AUTO POPULATE CURRENT MONTH (Your Exact Block Rotation) ======================
+// ====================== AUTO POPULATE CURRENT MONTH - STABLE PLANT ASSIGNMENT ======================
 async function autoPopulateCurrentMonth() {
-    if (!currentUser) {
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (!user) return alert("❌ You must be logged in.");
-        currentUser = user;
+    const hasPermission = await hasScheduleEditPermission();
+    if (!hasPermission) {
+        return alert("❌ Only Supervisors and LH certified members (or Trevor Wood) can auto-populate the schedule.");
     }
 
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-    if (!confirm(`⚠️ Delete ALL shifts for ${monthName} and generate new schedule?\n\nThis uses your exact 28-day block rotation:\n• Same area for entire block\n• Swap only at block boundaries\n• All main areas covered (1 person each)`)) 
+    if (!confirm(`⚠️ Delete ALL non-vacation shifts for ${monthName}?\n\nBlock rotation with stable plant assignment.`)) 
         return;
 
     const startStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
     const endStr = `${year}-${String(month+1).padStart(2,'0')}-${new Date(year, month+1, 0).getDate()}`;
 
-    // Clear current month's schedule
-    await supabaseClient.from('schedule').delete().gte('date', startStr).lte('date', endStr);
+    await supabaseClient.from('schedule').delete().gte('date', startStr).lte('date', endStr).neq('status', 'vacation');
 
     const { data: membersData } = await supabaseClient
         .from('members').select('*').eq('status', 'Active');
@@ -1943,8 +2046,10 @@ async function autoPopulateCurrentMonth() {
     const mainAreas = ["Panel 1","Panel 2","Comp 1","Comp 2","Field 1","Field 2","Demin","Pretreat"];
     const inserts = [];
     let current = new Date(year, month, 1);
-
     let blockRotationIndex = 0;
+
+    // Track plant choice per worker for current block
+    const plantChoice = new Map();   // memberName → "1" or "2"
 
     while (current.getMonth() === month) {
         const dateStr = current.toISOString().split('T')[0];
@@ -1954,16 +2059,24 @@ async function autoPopulateCurrentMonth() {
             const dayShifts = [];
             const usedToday = new Set();
 
-            // 1. TRAINING WORKERS (stay fixed)
+            // === 1. TRAINING WORKERS (Mostly Fixed) ===
+            let trainerFloated = false;
             trainingWorkers.forEach(member => {
-                const area = getTrainingArea(member);
-                if (area) {
-                    dayShifts.push({ date: dateStr, member_name: member.full_name, area, status: 'working', is_floater: false });
+                const shouldFloat = !trainerFloated && Math.random() < 0.12;
+                if (shouldFloat) {
+                    dayShifts.push({ date: dateStr, member_name: member.full_name, area: "Floater", status: "working", is_floater: true });
                     usedToday.add(member.full_name);
+                    trainerFloated = true;
+                } else {
+                    const area = getTrainingArea(member);
+                    if (area) {
+                        dayShifts.push({ date: dateStr, member_name: member.full_name, area, status: 'working', is_floater: false });
+                        usedToday.add(member.full_name);
+                    }
                 }
             });
 
-            // 2. SUPERVISOR + LH BACKUP
+            // === 2. SUPERVISOR + LH BACKUP ===
             let supOnVacation = false;
             if (supervisor && !usedToday.has(supervisor.full_name)) {
                 supOnVacation = (cycleDay % 11 === 0);
@@ -1987,26 +2100,45 @@ async function autoPopulateCurrentMonth() {
                 }
             }
 
-            // 3. MAIN ROTATION - Block based (your exact pattern)
+            // === 3. BLOCK ROTATION WITH STABLE PLANT ===
             const isNewBlock = isStartOfNewBlock(cycleDay);
             if (isNewBlock) {
                 blockRotationIndex = (blockRotationIndex + 1) % Math.max(regularWorkers.length, 1);
+                plantChoice.clear(); // Reset plant choices at new block
             }
 
             const available = regularWorkers.filter(m => !usedToday.has(m.full_name));
 
-            // Assign certified workers to main areas
-            for (let area of mainAreas) {
-                if (dayShifts.some(s => s.area === area)) continue;
+            // Assign main areas
+            for (let baseArea of ["Panel", "Comp", "Field", "Demin", "Pretreat"]) {
+                const areaSlots = baseArea === "Demin" || baseArea === "Pretreat" 
+                    ? [baseArea] 
+                    : [`${baseArea} 1`, `${baseArea} 2`];
 
-                for (let i = 0; i < available.length; i++) {
-                    const idx = (blockRotationIndex + i) % available.length;
-                    const member = available[idx];
-                    if (canWorkArea(member, area)) {
+                for (let area of areaSlots) {
+                    if (dayShifts.some(s => s.area === area)) continue;
+
+                    for (let i = 0; i < available.length; i++) {
+                        const idx = (blockRotationIndex + i) % available.length;
+                        const member = available[idx];
+                        if (!canWorkArea(member, area)) continue;
+
+                        // Assign stable plant within block
+                        let finalArea = area;
+                        if (area.includes("1") || area.includes("2")) {
+                            const base = area.split(' ')[0];
+                            if (!plantChoice.has(member.full_name)) {
+                                // Choose plant at start of block
+                                plantChoice.set(member.full_name, Math.random() > 0.5 ? "2" : "1");
+                            }
+                            const chosenPlant = plantChoice.get(member.full_name);
+                            finalArea = `${base} ${chosenPlant}`;
+                        }
+
                         dayShifts.push({
                             date: dateStr,
                             member_name: member.full_name,
-                            area: area,
+                            area: finalArea,
                             status: "working",
                             is_floater: false
                         });
@@ -2016,7 +2148,7 @@ async function autoPopulateCurrentMonth() {
                 }
             }
 
-            // 4. Remaining workers become Floaters
+            // === 4. Remaining → Floaters ===
             available.forEach(m => {
                 if (!usedToday.has(m.full_name)) {
                     dayShifts.push({
@@ -2038,11 +2170,9 @@ async function autoPopulateCurrentMonth() {
     const { error } = await supabaseClient.from('schedule').insert(inserts);
 
     if (error) {
-        console.error(error);
-        alert("Failed to generate schedule: " + error.message);
+        alert("Failed: " + error.message);
     } else {
-        alert(`✅ ${monthName} schedule generated successfully!\n\n• Block rotation applied (stay same area → swap at block boundaries)\n• All required areas covered\n• Training workers fixed\n• Floaters rotated fairly`);
-        
+        alert(`✅ ${monthName} schedule generated!\n\n• Stable block rotation\n• Same plant throughout each block\n• New plant choice possible at block boundaries`);
         await loadSchedule();
         await renderCalendar();
         renderMemberShiftBreakdown();
@@ -2093,6 +2223,41 @@ function getBestAreaForMember(member) {
     if (member.panel_status === 'Yes') options.push(Math.random() > 0.5 ? 'Panel 1' : 'Panel 2');
     options.push('Floater'); // fallback
     return options[Math.floor(Math.random() * options.length)];
+}
+// ====================== CLEAR CURRENT MONTH (Preserves Vacations) ======================
+async function clearCurrentMonth() {
+    const hasPermission = await hasScheduleEditPermission();
+    if (!hasPermission) {
+        return alert("❌ Only Supervisors and LH certified members can clear the schedule.");
+    }
+
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    if (!confirm(`🗑️ Clear ALL non-vacation shifts for ${monthName}?\n\nVacation days will be preserved.`)) {
+        return;
+    }
+
+    const startStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
+    const endStr = `${year}-${String(month+1).padStart(2,'0')}-${new Date(year, month+1, 0).getDate()}`;
+
+    const { error } = await supabaseClient
+        .from('schedule')
+        .delete()
+        .gte('date', startStr)
+        .lte('date', endStr)
+        .neq('status', 'vacation');   // ← This is the key change
+
+    if (error) {
+        console.error(error);
+        alert("Failed to clear month: " + error.message);
+    } else {
+        alert(`✅ ${monthName} cleared (vacation days preserved).`);
+        await loadSchedule();
+        await renderCalendar();
+        renderMemberShiftBreakdown();
+    }
 }
 
 // ====================== HANDLE SINGLE CLICK ======================
@@ -2402,6 +2567,10 @@ function updateAvailableAreas() {
 }
 
 async function addShift() {
+    const hasPermission = await hasScheduleEditPermission();
+    if (!hasPermission) {
+        return alert("❌ Only Supervisors and LH certified members can add shifts.");
+    }
     const dateStr = document.getElementById('selectedDate').dataset.date;
     const memberName = document.getElementById('shiftMember').value.trim();
     const status = document.getElementById('shiftStatus').value;
@@ -2471,6 +2640,11 @@ async function editShift(shiftId, dateStr) {
 }
 
 async function updateShift(shiftId, dateStr) {
+    const hasPermission = await hasScheduleEditPermission();
+    if (!hasPermission) {
+        return alert("❌ Only Supervisors and LH certified members can update shifts.");
+    }
+
     const memberName = document.getElementById('shiftMember').value.trim();
     const area = document.getElementById('shiftArea').value.trim();
     const status = document.getElementById('shiftStatus').value;
@@ -2495,12 +2669,16 @@ async function updateShift(shiftId, dateStr) {
         alert("✅ Shift updated successfully!");
         resetAddShiftForm();
         await loadSchedule();
-        showDayDetails(dateStr);   // Refresh the panel
+        showDayDetails(dateStr);
+        renderMemberShiftBreakdown();
     }
-    renderMemberShiftBreakdown();
 }
-
 async function deleteShift(shiftId, dateStr) {
+    const hasPermission = await hasScheduleEditPermission();
+    if (!hasPermission) {
+        return alert("❌ Only Supervisors and LH certified members can delete shifts.");
+    }
+
     if (!confirm("Delete this shift permanently?")) return;
 
     const { error } = await supabaseClient
@@ -2513,9 +2691,9 @@ async function deleteShift(shiftId, dateStr) {
     } else {
         alert("✅ Shift deleted.");
         await loadSchedule();
-        showDayDetails(dateStr);   // Refresh the panel
+        showDayDetails(dateStr);
+        renderMemberShiftBreakdown();
     }
-    renderMemberShiftBreakdown();
 }
 
 // Reset form back to "Add Shift" mode
@@ -2660,6 +2838,45 @@ function isSameDayInMountainTime(dateStr) {
   return dateStr === todayStr;
 }
 
+// ====================== TAB SYSTEM ======================
+function initTabs() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            tabButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            tabContents.forEach(content => content.style.display = 'none');
+
+            const tabId = btn.dataset.tab + '-tab';
+            const activeTab = document.getElementById(tabId);
+            if (activeTab) {
+                activeTab.style.display = 'block';
+                
+                // Refresh analytics when switching to those tabs
+                if (btn.dataset.tab === 'memberchart') {
+                    const selected = document.getElementById('memberChartSelect').value;
+                    if (selected) renderMemberShiftChart(selected);
+                }
+                if (btn.dataset.tab === 'crewoverview') {
+                    renderMemberShiftBreakdown();
+                }
+            }
+        });
+    });
+}
+// Temporary: Print User ID in console
+window.showMyUserId = async function() {
+    await loadUser();
+    if (currentUser) {
+        console.log("%cYour User ID:", "color: #00C7B2; font-size: 16px;", currentUser.id);
+        alert("✅ Your User ID is:\n\n" + currentUser.id + "\n\nCopy this and send it to me!");
+    } else {
+        alert("Not logged in. Please log in first.");
+    }
+};
 // ====================== MAIN INITIALIZATION ======================
 document.addEventListener('DOMContentLoaded', async () => {
   fetch('navbar.html')
@@ -2693,6 +2910,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (cancelBtn) cancelBtn.addEventListener('click', () => document.getElementById('memberModal').classList.remove('active'));
     if (memberForm) memberForm.addEventListener('submit', saveMember);
   }
+initTabs();  
+loadMemberChartDropdown();
+// ====================== DEBUG USER ID ======================
+window.getMyUserId = async function() {
+    console.log("🔍 Trying to load user...");
+
+    const { data: { user }, error } = await supabaseClient.auth.getUser();
+    
+    if (error) {
+        console.error("Auth Error:", error);
+        alert("Auth Error: " + error.message);
+        return;
+    }
+
+    if (!user) {
+        console.warn("No user found - not logged in?");
+        alert("You are not logged in. Please log in first.");
+        return;
+    }
+
+    currentUser = user;
+    console.log("%c✅ SUCCESS - Your User ID:", "color:#00ff00; font-size:18px;", user.id);
+    console.log("Email:", user.email);
+    
+    alert("✅ Your User ID is:\n\n" + user.id + "\n\nCopy this entire ID and paste it back to me.");
+};
 
 if (document.getElementById('calendarGrid')) {
     await loadSchedule();
@@ -2782,7 +3025,7 @@ if (document.getElementById('leaderboardBody')) {
     });
   }
 document.getElementById('autoPopulateBtn')?.addEventListener('click', autoPopulateCurrentMonth);});
-
+document.getElementById('clearMonthBtn')?.addEventListener('click', clearCurrentMonth);
 // ================================================
 // GOLF PAGE GLOBAL FUNCTIONS (Must be outside DOMContentLoaded)
 // ================================================

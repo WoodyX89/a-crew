@@ -1893,3 +1893,37 @@ td {
 .dancing-select.dance {
     animation: danceSelect 0.6s ease forwards;
 }
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid rgba(0, 199, 178, 0.2);
+    padding-bottom: 10px;
+}
+
+.tab-btn {
+    padding: 12px 24px;
+    background: rgba(255,255,255,0.08);
+    border: none;
+    border-radius: 12px 12px 0 0;
+    color: #a0d8ff;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.tab-btn.active {
+    background: #00C7B2;
+    color: white;
+    box-shadow: 0 4px 12px rgba(0, 199, 178, 0.3);
+}
+
+.tab-content {
+    animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
