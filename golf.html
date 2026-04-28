@@ -1,87 +1,99 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>A Crew - Golf Scramble</title>
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A Crew - Golf Scramble</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <div id="navbar-placeholder"></div>
+<div id="navbar-placeholder"></div>
+<div class="main-content">
+  <h1 class="welcome">Golf Scramble <i class="fas fa-golf-ball"></i></h1>
 
-  <div class="main-content">
-    <h1 class="welcome">Golf Scramble Leaderboard <i class="fas fa-golf-ball"></i></h1>
-
-    <div class="card" style="margin-bottom: 1.5rem;">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-        <h2 style="margin:0; color:#00C7B2;">Live Standings</h2>
-        <div style="display:flex; gap:10px;">
-          <button onclick="showAddTeamModal()" class="add-team-btn">
-            <i class="fas fa-plus"></i> Add Team
-          </button>
-        </div>
-      </div>
-      <p id="last-updated" style="margin-top:8px; opacity:0.8; font-size:0.95rem;">Last updated: just now</p>
+  <div class="card" style="margin-bottom:1rem;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+      <select id="gameSelect" onchange="loadCurrentGame()" style="padding:10px; font-size:1.1rem; min-width:220px;"></select>
+      <button onclick="showNewGameModal()" class="add-team-btn">
+        <i class="fas fa-plus"></i> New Game
+      </button>
+      <button onclick="showAddTeamModal()" class="add-team-btn">
+        <i class="fas fa-plus"></i> Add Team
+      </button>
     </div>
+  </div>
 
-    <!-- Mobile-friendly Leaderboard -->
-    <div class="card">
-      <div class="table-container">
-        <table class="leaderboard-table" id="leaderboardTable">
-          <thead>
+  <div class="card">
+    <h2 id="currentGameTitle" style="color:#00C7B2; margin-bottom:8px;">Loading...</h2>
+    <p id="last-updated" style="margin-top:0; opacity:0.8; font-size:0.95rem;">Last updated: just now</p>
+  </div>
+
+  <div class="card">
+    <div class="table-container">
+      <table class="leaderboard-table" id="leaderboardTable">
+        <thead>
           <tr>
-              <th>Pos</th>
-              <th>Team</th>
-              <th>Players</th>
-              <th>Score</th>
-              <th>Thru</th>
-              <th>To Par</th>
-              <th style="width:50px;"></th>
+            <th>Pos</th>
+            <th>Team</th>
+            <th>Players</th>
+            <th>Total</th>
+            <th>To Par</th>
+            <th>Holes</th>
+            <th></th>
           </tr>
-          </thead>
-          <tbody id="leaderboardBody"></tbody>
-        </table>
-      </div>
+        </thead>
+        <tbody id="leaderboardBody"></tbody>
+      </table>
     </div>
   </div>
+</div>
 
-  <!-- Add/Edit Team Modal -->
-  <div id="teamModal" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width:480px; width:92%;">
-      <div class="modal-header">
-        <h2 id="modalTeamTitle">Add New Team</h2>
-        <button onclick="hideTeamModal()" class="close-btn">&times;</button>
-      </div>
-      <div style="padding:24px;">
-        <input type="hidden" id="teamId">
-        <div class="form-group">
-          <label>Team Name</label>
-          <input type="text" id="teamName" placeholder="e.g. The Mulligans">
-        </div>
-        <div class="form-group">
-          <label>Players (comma separated)</label>
-          <input type="text" id="teamPlayers" placeholder="Trevor Wood, Shawn Grant, Mike Chen">
-        </div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
-          <div class="form-group">
-            <label>Score</label>
-            <input type="number" id="teamScore" value="0">
-          </div>
-          <div class="form-group">
-            <label>Thru</label>
-            <input type="text" id="teamThru" value="F" maxlength="3">
-          </div>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button onclick="hideTeamModal()" class="cancel-btn">Cancel</button>
-        <button onclick="saveTeam()" class="create-btn">Save Team</button>
-      </div>
+<!-- New Game Modal -->
+<div id="newGameModal" class="modal" style="display:none;">
+  <div class="modal-content" style="max-width:480px;">
+    <h2>New Golf Game</h2>
+    <input type="text" id="newGameName" placeholder="e.g. April 26 Scramble" style="width:100%;padding:12px;margin:10px 0;">
+    <input type="text" id="newCourseName" placeholder="Course Name (optional)" style="width:100%;padding:12px;margin:10px 0;">
+    <div class="modal-actions">
+      <button onclick="hideNewGameModal()" class="cancel-btn">Cancel</button>
+      <button onclick="createNewGame()" class="create-btn">Create Game</button>
     </div>
   </div>
+</div>
 
-  <script src="js/app.js"></script>
+<!-- Add/Edit Team Modal -->
+<div id="teamModal" class="modal" style="display:none;">
+  <div class="modal-content" style="max-width:520px;">
+    <div class="modal-header">
+      <h2 id="modalTeamTitle">Add New Team</h2>
+      <button onclick="hideTeamModal()" class="close-btn">&times;</button>
+    </div>
+    <div style="padding:24px;" id="teamFormContent">
+      <input type="hidden" id="teamId">
+      
+      <div class="form-group">
+        <label>Team Name</label>
+        <input type="text" id="teamName" placeholder="e.g. The Mulligans">
+      </div>
+      <div class="form-group">
+        <label>Players (comma separated)</label>
+        <input type="text" id="teamPlayers" placeholder="Trevor Wood, Shawn Grant, Mike Chen">
+      </div>
+
+      <div id="holeScoresSection" style="margin:20px 0;">
+        <strong>Hole Scores (1-18)</strong>
+        <div id="holeInputs" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(55px,1fr)); gap:8px; margin-top:12px;"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="hideTeamModal()" class="cancel-btn">Cancel</button>
+      <button onclick="saveTeam()" class="create-btn">Save Team</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
 </body>
 </html>

@@ -7,13 +7,18 @@ const supabaseClient = supabase.createClient(
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3ZnducGRqZW92cWV6bndiY2t4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxOTI2NzIsImV4cCI6MjA5MTc2ODY3Mn0.QohjsfSgvw64ZwSLRCtr_4rh49JyInEmrpDdzrXISQU'
 );
 
-// ====================== 28-DAY ROTATION CONFIG ======================
+// ====================== FINAL 28-DAY ROTATION (Your Desired Pattern) ======================
 const rotationCycle = 28;
 const workingDaysInCycle = [
-  false, false, true, true, true, true, true,
-  false, false, false, false, false, true, true,
-  true, true, false, false, false, false, false,
-  true, true, true, true, true, false, false
+    false, false,                    // OFF
+    true,  true,                     // Days - 2 days (same members)
+    true,  true,  true,              // Nights - 3 nights (same members)
+    false, false, false, false, false, // OFF
+    true,  true,                     // Days - 2 days (same members)
+    true,  true,                     // Nights - 2 nights (same members)
+    false, false, false, false, false, // OFF
+    true,  true,  true,              // Days - 3 days (same members)
+    true,  true, false, false        // Nights - 2 nights (same members)
 ];
 const rotationStartDate = new Date('2025-01-01');
 
@@ -42,6 +47,25 @@ let dragStartElement = null;
 let multiSelectActive = false;
 let memberShiftChartInstance = null;
 
+// ====================== STRONG RESET FUNCTION ======================
+function resetAllModalsAndSelections() {
+    selectedDays = [];
+    multiSelectActive = false;
+    isDragging = false;
+
+    // Clear visual selection
+    document.querySelectorAll('.calendar-day').forEach(el => {
+        el.classList.remove('selected-range');
+    });
+
+    // Close day details panel
+    const dayDetails = document.getElementById('dayDetails');
+    if (dayDetails) dayDetails.classList.remove('open');
+
+    // Close bulk modal
+    const bulkModal = document.getElementById('bulkShiftModal');
+    if (bulkModal) bulkModal.classList.remove('active');
+}
 // ====================== MEMBER-SPECIFIC VERTICAL SHIFT CHART (with dancing dropdown) ======================
 
 
@@ -272,205 +296,6 @@ function renderMemberShiftChart(memberName) {
     });
 }
 
-// ====================== SELECTION (Mouse + Touch) ======================
-
-
-async function showBulkShiftModal() {
-    const memberName = prompt("Enter Member Name for all selected days:");
-    if (!memberName) return clearSelection();
-
-    const area = prompt("Enter Area (or type 'Floater'):");
-    if (!area) return clearSelection();
-
-    const status = confirm("Is this a Vacation?") ? "vacation" : "working";
-
-    const inserts = selectedDays.map(dateStr => ({
-        date: dateStr,
-        member_name: memberName,
-        area: area,
-        status: status,
-        is_floater: area.toLowerCase() === "floater"
-    }));
-
-    const { error } = await supabaseClient.from('schedule').insert(inserts);
-
-    if (error) {
-        alert("Failed to add shifts: " + error.message);
-    } else {
-        alert(`✅ Successfully added shift to ${selectedDays.length} days!`);
-        await loadSchedule();
-        renderCalendar();
-    }
-
-    clearSelection();
-}
-
-// ====================== BULK SHIFT MODAL FUNCTIONS ======================
-// ====================== BULK SHIFT MODAL FUNCTIONS (with Vacation logic) ======================
-function showBulkShiftModal() {
-    const modal = document.getElementById('bulkShiftModal');
-    const daysInfo = document.getElementById('bulkDaysInfo');
-    
-    daysInfo.textContent = `Applying shift to ${selectedDays.length} days`;
-    
-    // Populate members
-    loadMembersIntoBulkDropdown();
-    
-    // Reset form
-    document.getElementById('bulkShiftArea').innerHTML = '<option value="">Select Area...</option>';
-    document.getElementById('bulkShiftStatus').value = 'working';
-    
-    // Show area group by default
-    document.getElementById('bulkAreaGroup').style.display = 'block';
-    
-    modal.classList.add('active');
-}
-
-function hideBulkShiftModal() {
-    document.getElementById('bulkShiftModal').classList.remove('active');
-    clearSelection();
-}
-// Update area visibility when status changes
-document.addEventListener('DOMContentLoaded', () => {
-    const statusSelect = document.getElementById('bulkShiftStatus');
-    if (statusSelect) {
-        statusSelect.addEventListener('change', function() {
-            const areaGroup = document.getElementById('bulkAreaGroup');
-            if (this.value === 'vacation') {
-                areaGroup.style.display = 'none';
-            } else {
-                areaGroup.style.display = 'block';
-            }
-        });
-    }
-});
-// Hide/Show Area dropdown when Status changes in single Add Shift form
-document.addEventListener('DOMContentLoaded', () => {
-    const statusSelect = document.getElementById('shiftStatus');
-    const areaGroup = document.getElementById('singleAreaGroup');
-
-    if (statusSelect && areaGroup) {
-        statusSelect.addEventListener('change', function() {
-            areaGroup.style.display = (this.value === 'vacation') ? 'none' : 'block';
-        });
-    }
-});
-
-async function loadMembersIntoBulkDropdown() {
-    const select = document.getElementById('bulkShiftMember');
-    select.innerHTML = '<option value="">Select Member...</option>';
-
-    const { data, error } = await supabaseClient
-        .from('members')
-        .select('*')
-        .eq('status', 'Active')
-        .order('full_name');
-
-    if (error) return console.error(error);
-
-    data.forEach(member => {
-        const opt = document.createElement('option');
-        opt.value = member.full_name;
-        opt.textContent = member.full_name;
-        opt.dataset.member = JSON.stringify(member);
-        select.appendChild(opt);
-    });
-
-    // Auto-update area options when member changes
-    select.addEventListener('change', updateBulkShiftAreas);
-}
-
-function updateBulkShiftAreas() {
-    const memberSelect = document.getElementById('bulkShiftMember');
-    const areaSelect = document.getElementById('bulkShiftArea');
-
-    areaSelect.innerHTML = '<option value="">Select Area...</option>';
-
-    const selectedOpt = memberSelect.options[memberSelect.selectedIndex];
-    if (!selectedOpt || !selectedOpt.dataset.member) return;
-
-    const member = JSON.parse(selectedOpt.dataset.member);
-
-    // Supervisors only get Supervisor
-    if (member.supervisor_status === 'Yes' || member.supervisor_status === 'Training') {
-        const opt = document.createElement('option');
-        opt.value = "Supervisor";
-        opt.textContent = "Supervisor";
-        areaSelect.appendChild(opt);
-        return;
-    }
-
-    // Regular areas + Floater
-    const areas = [];
-
-    if (member.lh_status === 'Yes' || member.lh_status === 'Training') areas.push({value:"LH", text:"LH"});
-    if (member.pt_status === 'Yes' || member.pt_status === 'Training') areas.push({value:"Pretreat", text:"PT (Pretreat)"});
-    if (member.demin_status === 'Yes' || member.demin_status === 'Training') areas.push({value:"Demin", text:"Demin"});
-    
-    if (member.field_status === 'Yes' || member.field_status === 'Training') {
-        areas.push({value:"Field 1", text:"Field 1"});
-        areas.push({value:"Field 2", text:"Field 2"});
-    }
-    if (member.comp_status === 'Yes' || member.comp_status === 'Training') {
-        areas.push({value:"Comp 1", text:"Comp 1"});
-        areas.push({value:"Comp 2", text:"Comp 2"});
-    }
-    if (member.panel_status === 'Yes' || member.panel_status === 'Training') {
-        areas.push({value:"Panel 1", text:"Panel 1"});
-        areas.push({value:"Panel 2", text:"Panel 2"});
-    }
-
-    // Always add Floater
-    areas.push({value:"Floater", text:"Float"});
-
-    areas.forEach(a => {
-        const opt = document.createElement('option');
-        opt.value = a.value;
-        opt.textContent = a.text;
-        areaSelect.appendChild(opt);
-    });
-}
-
-async function applyBulkShift() {
-    const hasPermission = await hasScheduleEditPermission();
-    if (!hasPermission) {
-        hideBulkShiftModal();
-        return alert("❌ Only Supervisors and LH certified members can add bulk shifts.");
-    }
-    const memberName = document.getElementById('bulkShiftMember').value.trim();
-    const status = document.getElementById('bulkShiftStatus').value;
-    let area = "";
-
-    if (!memberName) return alert("Please select a member.");
-
-    // Only require area if NOT on vacation
-    if (status !== 'vacation') {
-        area = document.getElementById('bulkShiftArea').value.trim();
-        if (!area) return alert("Please select an area.");
-    } else {
-        area = "Vacation";   // Optional: you can store this in area field
-    }
-
-    const inserts = selectedDays.map(dateStr => ({
-        date: dateStr,
-        member_name: memberName,
-        area: area,
-        status: status,
-        is_floater: area === "Floater"
-    }));
-
-    const { error } = await supabaseClient.from('schedule').insert(inserts);
-
-    if (error) {
-        alert("Failed to add shifts: " + error.message);
-    } else {
-        alert(`✅ Successfully added ${status === 'vacation' ? 'vacation' : 'shift'} to ${selectedDays.length} days!`);
-        hideBulkShiftModal();
-        await loadSchedule();
-        await renderCalendar();
-    }
-    renderMemberShiftBreakdown();
-}
 // ====================== PERMISSION CHECK - TREVOR WOOD (Full Access) ======================
 async function hasScheduleEditPermission() {
     if (!currentUser) {
@@ -953,6 +778,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initMobileMenu();
 });
 
+
 // ====================== MEMBERS FUNCTIONS - UPDATED WITH CERTIFICATIONS ======================
 async function loadMembers() {
     const tbody = document.getElementById('membersBody');
@@ -1038,6 +864,144 @@ async function loadMembers() {
 
     // Re-attach button listeners
     setTimeout(addActionListeners, 10);
+}
+// Get unique key for each block (so same workers stay together)
+function getBlockKey(dateStr) {
+    const cycleDay = getCycleDay(dateStr);
+    if (cycleDay >= 2 && cycleDay <= 6) return "block1";
+    if (cycleDay >= 12 && cycleDay <= 15) return "block2";
+    if (cycleDay >= 21 && cycleDay <= 25) return "block3";
+    return "unknown";
+}
+
+// Assign stable areas for a block
+function assignStableAreas(regularWorkers, alreadyUsed) {
+    const available = regularWorkers.filter(m => !alreadyUsed.has(m.full_name));
+    const requiredAreas = ["Panel 1", "Panel 2", "Comp 1", "Comp 2", "Field 1", "Field 2", "Demin", "Pretreat", "LH"];
+    
+    const assignment = [];
+    let areaIndex = 0;
+
+    // Shuffle slightly but keep stable within block
+    const shuffled = [...available].sort(() => Math.random() - 0.5);
+
+    shuffled.forEach(member => {
+        let assigned = false;
+
+        // Try to give them a certified area
+        for (let i = 0; i < requiredAreas.length; i++) {
+            const area = requiredAreas[(areaIndex + i) % requiredAreas.length];
+            if (canWorkArea(member, area)) {
+                assignment.push({ member_name: member.full_name, area: area });
+                areaIndex++;
+                assigned = true;
+                break;
+            }
+        }
+
+        if (!assigned) {
+            assignment.push({ member_name: member.full_name, area: "Floater" });
+        }
+    });
+
+    return assignment;
+}
+function createShift(dateStr, memberName, area, status = 'working') {
+    return {
+        date: dateStr,
+        member_name: memberName,
+        area: area,
+        status: status,
+        is_floater: area === "Floater"
+    };
+}
+
+function getBlockKey(cycleDay) {
+    if (cycleDay >= 2 && cycleDay <= 6) return "B1";   // 2D + 3N
+    if (cycleDay >= 12 && cycleDay <= 15) return "B2"; // 2D + 2N
+    if (cycleDay >= 21 && cycleDay <= 25) return "B3"; // 3D + 2N
+    return "Other";
+}
+
+function createStableBlockAssignment(regularWorkers, alreadyUsed) {
+    const available = regularWorkers.filter(m => !alreadyUsed.has(m.full_name));
+    const requiredAreas = [
+        "LH", "Pretreat", "Demin",
+        "Field 1", "Field 2", "Comp 1", "Comp 2",
+        "Panel 1", "Panel 2"
+    ];
+
+    const assignment = [];
+    let areaIdx = 0;
+
+    // Shuffle once per block for fair rotation
+    const shuffledWorkers = [...available].sort(() => Math.random() - 0.5);
+
+    shuffledWorkers.forEach(worker => {
+        let assignedArea = "Floater";
+
+        // Try to assign a certified area
+        for (let i = 0; i < requiredAreas.length; i++) {
+            const area = requiredAreas[(areaIdx + i) % requiredAreas.length];
+            if (canWorkArea(worker, area)) {
+                assignedArea = area;
+                areaIdx = (areaIdx + 1) % requiredAreas.length;
+                break;
+            }
+        }
+
+        assignment.push({
+            member_name: worker.full_name,
+            area: assignedArea
+        });
+    });
+
+    return assignment;
+}
+// ====================== CALENDAR DAY FLAGS (Final Rules) ======================
+function getDayFlags(dateStr) {
+    const shifts = scheduleData[dateStr] || [];
+    if (shifts.length === 0) {
+        return {
+            hasFlag: true,
+            reasons: ["No shifts scheduled for this working day"]
+        };
+    }
+
+    // Separate working shifts (vacations don't count)
+    const workingShifts = shifts.filter(s => s.status !== 'vacation');
+    const totalWorking = workingShifts.length;
+
+    const coveredAreas = new Set(workingShifts.map(s => s.area));
+    const reasons = [];
+
+    // Critical roles logic
+    const hasLH = coveredAreas.has("LH");
+    const hasSupervisor = coveredAreas.has("Supervisor");
+
+    // Supervisor is only critical if LH is NOT available
+    if (!hasSupervisor && !hasLH) {
+        reasons.push("Missing Supervisor (and no LH backup)");
+    }
+
+    // Other critical roles
+    const otherCritical = ["Panel 1", "Panel 2", "Comp 1", "Comp 2", "Field 1", "Field 2", "Demin", "Pretreat"];
+    const missingOther = otherCritical.filter(area => !coveredAreas.has(area));
+
+    if (missingOther.length > 0) {
+        reasons.push(`Missing critical roles: ${missingOther.join(", ")}`);
+    }
+
+    // Low staffing
+    if (totalWorking < 9) {
+        reasons.push(`Below minimum crew: ${totalWorking}/9 working shifts`);
+    }
+
+    return {
+        hasFlag: reasons.length > 0,
+        reasons: reasons,
+        totalWorking: totalWorking
+    };
 }
 
 // ====================== AREA STATS HELPER (Month + Year + Plant Separation) ======================
@@ -1165,47 +1129,38 @@ function changeSort() {
 
 // ====================== SHOW WHO LIKED THE POST (Fixed Version) ======================
 async function showLikers(postId) {
-    if (!currentUser) {
-        return alert("You must be logged in to see who liked this post.");
-    }
+    if (!currentUser) return alert("Not logged in.");
 
     try {
-        // Step 1: Get all likes for this post
-        const { data: likesData, error: likesError } = await supabaseClient
+        const { data: likesData } = await supabaseClient
             .from('post_likes')
             .select('user_id')
             .eq('post_id', postId);
 
-        if (likesError) throw likesError;
-        if (!likesData || likesData.length === 0) {
-            return alert("No one has liked this post yet.");
-        }
+        const userIds = likesData.map(l => l.user_id);
 
-        // Step 2: Get the full names from members table using the user_ids
-        const userIds = likesData.map(like => like.user_id);
-
-        const { data: membersData, error: membersError } = await supabaseClient
+        const { data: members } = await supabaseClient
             .from('members')
-            .select('full_name')
+            .select('id, full_name, email')
             .in('id', userIds);
 
-        if (membersError) throw membersError;
+        console.log("🔍 DEBUG - Likes:", likesData);
+        console.log("🔍 DEBUG - Members found:", members);
 
-        // Build the list of names
-        const names = membersData
-            .map(member => member.full_name || "Unknown Crew Member")
-            .filter(name => name.trim() !== "")
-            .join("\n• ");
+        const memberMap = {};
+        members.forEach(m => {
+            memberMap[m.id] = m.full_name?.trim() || m.email?.split('@')[0] || "Unknown";
+        });
 
-        if (names) {
-            alert(`❤️ Liked by:\n\n• ${names}`);
-        } else {
-            alert(`This post has ${likesData.length} like(s), but names could not be loaded.`);
-        }
+        const names = likesData.map(like => 
+            memberMap[like.user_id] || "Unknown Member"
+        );
 
-    } catch (err) {
-        console.error("Likers error:", err);
-        alert("Could not load likers.\n\nCheck browser console (F12) for details.");
+        alert(`Liked by ${names.length} people:\n\n• ${names.join("\n• ")}`);
+
+    } catch (e) {
+        console.error(e);
+        alert("Error: " + e.message);
     }
 }
 
@@ -1934,14 +1889,13 @@ async function deleteShift(shiftId, dateStr) {
 // Expose to global scope so onclick works
 window.deleteShift = deleteShift;
 
-// ====================== RENDER CALENDAR - LOCKED SELECTION ======================
 async function renderCalendar() {
+    resetAllModalsAndSelections();   // ← Critical: reset FIRST
+
     const grid = document.getElementById('calendarGrid');
     if (!grid) return;
 
     grid.innerHTML = '';
-    selectedDays = [];
-    multiSelectActive = false;
 
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -1975,6 +1929,29 @@ async function renderCalendar() {
 
         dayEl.innerHTML = `<span>${day}</span>`;
 
+        // === SINGLE UNIFIED FLAG ===
+    if (isWorkingDay(dateStr)) {
+        const flags = getDayFlags(dateStr);
+        
+        if (flags.hasFlag) {
+            const flagEl = document.createElement('div');
+            flagEl.className = 'unified-flag';
+            flagEl.innerHTML = '🚩';
+            
+            // Better tooltip
+            flagEl.title = `Day Summary (${flags.totalWorking} working shifts)\n\n` + 
+                          flags.reasons.join('\n\n');
+            
+            flagEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                alert(`Flags for ${dateStr} (${flags.totalWorking} working shifts):\n\n` + 
+                      flags.reasons.join('\n\n'));
+            });
+
+            dayEl.appendChild(flagEl);
+        }
+    }
+
         // Event icon
         if (eventsThisMonth[dateStr] && eventsThisMonth[dateStr].length > 0) {
             const icon = document.createElement('div');
@@ -1987,10 +1964,7 @@ async function renderCalendar() {
             dayEl.appendChild(icon);
         }
 
-        // Click / Tap handling
         dayEl.addEventListener('click', (e) => handleDayClick(e, dayEl));
-
-        // Drag / Touch start
         dayEl.addEventListener('mousedown', (e) => startDrag(e, dayEl));
         dayEl.addEventListener('touchstart', (e) => startDrag(e, dayEl), { passive: false });
 
@@ -2008,171 +1982,117 @@ async function renderCalendar() {
     renderShiftAreaChart();
 }
 
-// ====================== AUTO POPULATE CURRENT MONTH - STABLE PLANT ASSIGNMENT ======================
+// ====================== STRICT ONE WORKER PER AREA + BLOCK STABLE ======================
 async function autoPopulateCurrentMonth() {
     const hasPermission = await hasScheduleEditPermission();
-    if (!hasPermission) {
-        return alert("❌ Only Supervisors and LH certified members (or Trevor Wood) can auto-populate the schedule.");
-    }
+    if (!hasPermission) return alert("❌ Permission denied.");
 
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-    if (!confirm(`⚠️ Delete ALL non-vacation shifts for ${monthName}?\n\nBlock rotation with stable plant assignment.`)) 
+    if (!confirm(`Generate schedule for ${monthName}?\n\n• Exactly ONE worker per area\n• Same worker stays in same area for entire block`)) {
         return;
+    }
 
     const startStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
     const endStr = `${year}-${String(month+1).padStart(2,'0')}-${new Date(year, month+1, 0).getDate()}`;
 
-    await supabaseClient.from('schedule').delete().gte('date', startStr).lte('date', endStr).neq('status', 'vacation');
+    // Clear existing non-vacation shifts
+    await supabaseClient.from('schedule').delete()
+        .gte('date', startStr).lte('date', endStr)
+        .neq('status', 'vacation');
 
     const { data: membersData } = await supabaseClient
         .from('members').select('*').eq('status', 'Active');
 
-    if (!membersData?.length) return alert("No active members.");
+    if (!membersData?.length) return alert("No active members found.");
 
+    // Categorize members
     const supervisor = membersData.find(m => m.supervisor_status === 'Yes');
     const trainingWorkers = membersData.filter(m => 
-        m.supervisor_status === 'Training' || m.lh_status === 'Training' ||
-        m.pt_status === 'Training' || m.demin_status === 'Training' ||
-        m.field_status === 'Training' || m.comp_status === 'Training' ||
-        m.panel_status === 'Training'
-    );
-    const regularWorkers = membersData.filter(m => 
-        !trainingWorkers.includes(m) && m !== supervisor
+        ['Yes','Training'].some(s => 
+            m.supervisor_status === s || m.lh_status === s || m.pt_status === s ||
+            m.demin_status === s || m.field_status === s || 
+            m.comp_status === s || m.panel_status === s
+        ) && m.supervisor_status !== 'Yes'
     );
 
-    const mainAreas = ["Panel 1","Panel 2","Comp 1","Comp 2","Field 1","Field 2","Demin","Pretreat"];
+    const regularWorkers = membersData.filter(m => 
+        m !== supervisor && !trainingWorkers.some(t => t.full_name === m.full_name)
+    );
+
     const inserts = [];
     let current = new Date(year, month, 1);
-    let blockRotationIndex = 0;
-
-    // Track plant choice per worker for current block
-    const plantChoice = new Map();   // memberName → "1" or "2"
+    window.currentBlockAssignments = new Map(); // Reset block memory
 
     while (current.getMonth() === month) {
         const dateStr = current.toISOString().split('T')[0];
-        const cycleDay = getCycleDay(dateStr);
 
         if (isWorkingDay(dateStr)) {
             const dayShifts = [];
             const usedToday = new Set();
 
-            // === 1. TRAINING WORKERS (Mostly Fixed) ===
-            let trainerFloated = false;
+            const cycleDay = getCycleDay(dateStr);
+            const blockKey = getBlockKey(cycleDay);
+
+            // === 1. TRAINING WORKERS (Locked to their training area) ===
             trainingWorkers.forEach(member => {
-                const shouldFloat = !trainerFloated && Math.random() < 0.12;
-                if (shouldFloat) {
-                    dayShifts.push({ date: dateStr, member_name: member.full_name, area: "Floater", status: "working", is_floater: true });
+                const area = getTrainingArea(member);
+                if (area) {
+                    dayShifts.push(createShift(dateStr, member.full_name, area));
                     usedToday.add(member.full_name);
-                    trainerFloated = true;
-                } else {
-                    const area = getTrainingArea(member);
-                    if (area) {
-                        dayShifts.push({ date: dateStr, member_name: member.full_name, area, status: 'working', is_floater: false });
-                        usedToday.add(member.full_name);
-                    }
                 }
             });
 
-            // === 2. SUPERVISOR + LH BACKUP ===
-            let supOnVacation = false;
+            // === 2. SUPERVISOR ===
             if (supervisor && !usedToday.has(supervisor.full_name)) {
-                supOnVacation = (cycleDay % 11 === 0);
-                dayShifts.push({
-                    date: dateStr,
-                    member_name: supervisor.full_name,
-                    area: supOnVacation ? "Vacation" : "Supervisor",
-                    status: supOnVacation ? "vacation" : "working",
-                    is_floater: false
-                });
+                const isVacation = (cycleDay % 11 === 0);
+                dayShifts.push(createShift(
+                    dateStr, 
+                    supervisor.full_name, 
+                    isVacation ? "Vacation" : "Supervisor",
+                    isVacation ? "vacation" : "working"
+                ));
                 usedToday.add(supervisor.full_name);
             }
 
-            if (supOnVacation) {
-                const lh = regularWorkers.find(m => 
-                    (m.lh_status === 'Yes' || m.lh_status === 'Training') && !usedToday.has(m.full_name)
-                );
-                if (lh) {
-                    dayShifts.push({ date: dateStr, member_name: lh.full_name, area: "LH", status: "working", is_floater: false });
-                    usedToday.add(lh.full_name);
+            // === 3. STABLE BLOCK ASSIGNMENTS (One per area) ===
+            if (!window.currentBlockAssignments.has(blockKey)) {
+                const assignment = createStableBlockAssignment(regularWorkers, usedToday);
+                window.currentBlockAssignments.set(blockKey, assignment);
+            }
+
+            const blockAssignment = window.currentBlockAssignments.get(blockKey);
+
+            blockAssignment.forEach(ass => {
+                if (!usedToday.has(ass.member_name)) {
+                    dayShifts.push(createShift(dateStr, ass.member_name, ass.area));
+                    usedToday.add(ass.member_name);
                 }
-            }
+            });
 
-            // === 3. BLOCK ROTATION WITH STABLE PLANT ===
-            const isNewBlock = isStartOfNewBlock(cycleDay);
-            if (isNewBlock) {
-                blockRotationIndex = (blockRotationIndex + 1) % Math.max(regularWorkers.length, 1);
-                plantChoice.clear(); // Reset plant choices at new block
-            }
-
-            const available = regularWorkers.filter(m => !usedToday.has(m.full_name));
-
-            // Assign main areas
-            for (let baseArea of ["Panel", "Comp", "Field", "Demin", "Pretreat"]) {
-                const areaSlots = baseArea === "Demin" || baseArea === "Pretreat" 
-                    ? [baseArea] 
-                    : [`${baseArea} 1`, `${baseArea} 2`];
-
-                for (let area of areaSlots) {
-                    if (dayShifts.some(s => s.area === area)) continue;
-
-                    for (let i = 0; i < available.length; i++) {
-                        const idx = (blockRotationIndex + i) % available.length;
-                        const member = available[idx];
-                        if (!canWorkArea(member, area)) continue;
-
-                        // Assign stable plant within block
-                        let finalArea = area;
-                        if (area.includes("1") || area.includes("2")) {
-                            const base = area.split(' ')[0];
-                            if (!plantChoice.has(member.full_name)) {
-                                // Choose plant at start of block
-                                plantChoice.set(member.full_name, Math.random() > 0.5 ? "2" : "1");
-                            }
-                            const chosenPlant = plantChoice.get(member.full_name);
-                            finalArea = `${base} ${chosenPlant}`;
-                        }
-
-                        dayShifts.push({
-                            date: dateStr,
-                            member_name: member.full_name,
-                            area: finalArea,
-                            status: "working",
-                            is_floater: false
-                        });
-                        usedToday.add(member.full_name);
-                        break;
-                    }
-                }
-            }
-
-            // === 4. Remaining → Floaters ===
-            available.forEach(m => {
-                if (!usedToday.has(m.full_name)) {
-                    dayShifts.push({
-                        date: dateStr,
-                        member_name: m.full_name,
-                        area: "Floater",
-                        status: "working",
-                        is_floater: true
-                    });
-                    usedToday.add(m.full_name);
+            // === 4. Any remaining workers become Floaters ===
+            regularWorkers.forEach(member => {
+                if (!usedToday.has(member.full_name)) {
+                    dayShifts.push(createShift(dateStr, member.full_name, "Floater"));
                 }
             });
 
             inserts.push(...dayShifts);
         }
+
         current.setDate(current.getDate() + 1);
     }
 
     const { error } = await supabaseClient.from('schedule').insert(inserts);
 
     if (error) {
-        alert("Failed: " + error.message);
+        console.error(error);
+        alert("Error generating schedule: " + error.message);
     } else {
-        alert(`✅ ${monthName} schedule generated!\n\n• Stable block rotation\n• Same plant throughout each block\n• New plant choice possible at block boundaries`);
+        alert(`✅ ${monthName} schedule generated successfully!\n• Exactly 1 worker per area\n• Stable within each block`);
+        window.currentBlockAssignments = null;
         await loadSchedule();
         await renderCalendar();
         renderMemberShiftBreakdown();
@@ -2181,9 +2101,10 @@ async function autoPopulateCurrentMonth() {
 
 // ====================== HELPERS ======================
 function isStartOfNewBlock(cycleDay) {
-    // These are the starting days of the major working blocks
-    return cycleDay === 2 || cycleDay === 12 || cycleDay === 21;
+    // These are the exact starting points of your desired stable blocks
+    return [2, 4, 12, 14, 21, 24].includes(cycleDay);
 }
+
 
 function getTrainingArea(member) {
     if (member.supervisor_status === 'Training') return "Supervisor";
@@ -2466,6 +2387,275 @@ function setupDayDetailsCloseButton() {
   if (closeBtn) closeBtn.addEventListener('click', () => document.getElementById('dayDetails').classList.remove('open'));
 }
 
+// ====================== BULK AREA ASSIGNMENT - QUALIFIED WORKERS ONLY ======================
+const FIXED_AREAS = [
+    { key: "Supervisor", label: "Supervisor" },
+    { key: "LH",         label: "LH" },
+    { key: "Pretreat",   label: "Pretreat" },
+    { key: "Demin",      label: "Demin" },
+    { key: "Field 1",    label: "Field 1" },
+    { key: "Field 2",    label: "Field 2" },
+    { key: "Comp 1",     label: "Comp 1" },
+    { key: "Comp 2",     label: "Comp 2" },
+    { key: "Panel 1",    label: "Panel 1" },
+    { key: "Panel 2",    label: "Panel 2" }
+];
+
+let currentBulkTab = 0; // 0 = Crew Assignment, 1 = Book Time Off
+
+async function showBulkShiftModal() {
+    const modal = document.getElementById('bulkShiftModal');
+    if (!modal) return alert("Bulk modal not found in HTML");
+
+    document.getElementById('bulkDaysInfo').textContent = 
+        `Assigning crew to ${selectedDays.length} selected day(s)`;
+    document.getElementById('offDaysInfo').textContent = 
+        `Mark OFF for ${selectedDays.length} selected day(s)`;
+
+    // Reset to first tab
+    switchBulkTab(0);
+
+    // Populate Crew Assignment tab
+    const container = document.getElementById('areaAssignmentsContainer');
+    container.innerHTML = '';
+
+    FIXED_AREAS.forEach(area => {
+        const row = document.createElement('div');
+        row.className = 'area-assignment-row';
+
+        row.innerHTML = `
+            <div class="area-label">${area.label}</div>
+            <select class="area-member-select" data-area="${area.key}"></select>
+        `;
+
+        container.appendChild(row);
+
+        const select = row.querySelector('.area-member-select');
+        loadQualifiedMembersForArea(select, area.key);
+    });
+
+    // Populate Time Off members
+    const offContainer = document.getElementById('offMembersContainer');
+    offContainer.innerHTML = '';
+
+    const { data: members } = await supabaseClient
+        .from('members')
+        .select('full_name')
+        .eq('status', 'Active')
+        .order('full_name');
+
+    members.forEach(m => {
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex; align-items:center; gap:12px; padding:10px 14px; background:rgba(255,255,255,0.06); border-radius:10px;';
+        div.innerHTML = `
+            <input type="checkbox" class="off-member-check" value="${m.full_name}" style="transform:scale(1.4);">
+            <span style="font-size:1.05rem;">${m.full_name}</span>
+        `;
+        offContainer.appendChild(div);
+    });
+
+    modal.classList.add('active');
+}
+
+function switchBulkTab(tab) {
+    currentBulkTab = tab;
+    document.querySelectorAll('.bulk-tab-btn').forEach((btn, i) => {
+        btn.classList.toggle('active', i === tab);
+    });
+    document.getElementById('crewTab').style.display = tab === 0 ? 'block' : 'none';
+    document.getElementById('offTab').style.display = tab === 1 ? 'block' : 'none';
+}
+
+async function applyBulkAction() {
+    if (currentBulkTab === 0) {
+        await applyBulkAreaAssignment();
+    } else {
+        await applyBulkTimeOff();
+    }
+}
+
+async function applyBulkTimeOff() {
+    const checkedBoxes = document.querySelectorAll('.off-member-check:checked');
+    if (checkedBoxes.length === 0) {
+        return alert("Please select at least one member to mark as OFF.");
+    }
+
+    const membersToOff = Array.from(checkedBoxes).map(cb => cb.value);
+
+    const inserts = [];
+    selectedDays.forEach(dateStr => {
+        membersToOff.forEach(name => {
+            inserts.push({
+                date: dateStr,
+                member_name: name,
+                area: "OFF",
+                status: 'vacation',
+                is_floater: false
+            });
+        });
+    });
+
+    if (confirm(`Mark ${membersToOff.length} members as OFF for ${selectedDays.length} days?`)) {
+        const { error } = await supabaseClient.from('schedule').insert(inserts);
+        
+        if (error) {
+            alert("Error: " + error.message);
+        } else {
+            alert("✅ Time off booked successfully!");
+            hideBulkShiftModal();
+            await loadSchedule();
+            await renderCalendar();
+            renderMemberShiftBreakdown();
+        }
+    }
+}
+
+async function loadQualifiedMembersForArea(selectElement, areaKey) {
+    const { data: members, error } = await supabaseClient
+        .from('members')
+        .select('*')
+        .eq('status', 'Active')
+        .order('full_name');
+
+    if (error) return console.error(error);
+
+    selectElement.innerHTML = '<option value="">— Leave Unassigned —</option>';
+
+    members.forEach(member => {
+        let isQualified = false;
+
+        if (areaKey === "Supervisor") {
+            isQualified = member.supervisor_status === 'Yes' || member.supervisor_status === 'Training';
+        } else if (areaKey === "LH") {
+            isQualified = member.lh_status === 'Yes' || member.lh_status === 'Training';
+        } else if (areaKey === "Pretreat") {
+            isQualified = member.pt_status === 'Yes' || member.pt_status === 'Training';
+        } else if (areaKey === "Demin") {
+            isQualified = member.demin_status === 'Yes' || member.demin_status === 'Training';
+        } else if (areaKey.startsWith("Field")) {
+            isQualified = member.field_status === 'Yes' || member.field_status === 'Training';
+        } else if (areaKey.startsWith("Comp")) {
+            isQualified = member.comp_status === 'Yes' || member.comp_status === 'Training';
+        } else if (areaKey.startsWith("Panel")) {
+            isQualified = member.panel_status === 'Yes' || member.panel_status === 'Training';
+        }
+
+        if (isQualified) {
+            const opt = document.createElement('option');
+            opt.value = member.full_name;
+            opt.textContent = member.full_name;
+            selectElement.appendChild(opt);
+        }
+    });
+}
+
+async function applyBulkAreaAssignment() {
+    const hasPermission = await hasScheduleEditPermission();
+    if (!hasPermission) return alert("❌ Permission denied.");
+
+    const selects = document.querySelectorAll('.area-member-select');
+    const assignments = {};
+
+    selects.forEach(sel => {
+        const area = sel.dataset.area;
+        const memberName = sel.value.trim();
+        if (memberName) {
+            assignments[area] = memberName;
+        }
+    });
+
+    if (Object.keys(assignments).length === 0) {
+        return alert("Please assign at least one area.");
+    }
+
+    // Get all active members
+    const { data: allMembers } = await supabaseClient
+        .from('members')
+        .select('full_name')
+        .eq('status', 'Active');
+
+    const assignedMembers = new Set(Object.values(assignments));
+
+    // === CONFLICT CHECK ===
+    let conflicts = [];
+    for (const dateStr of selectedDays) {
+        const existingShifts = scheduleData[dateStr] || [];
+        
+        Object.keys(assignments).forEach(area => {
+            const member = assignments[area];
+            const existing = existingShifts.find(s => s.name === member);
+            if (existing) {
+                conflicts.push(`${dateStr}: ${member} is already in ${existing.area}`);
+            }
+        });
+    }
+
+    let proceed = true;
+    if (conflicts.length > 0) {
+        const msg = `⚠️ ${conflicts.length} conflict(s) found:\n\n` +
+                   conflicts.slice(0, 8).join('\n') +
+                   (conflicts.length > 8 ? `\n... and ${conflicts.length-8} more` : '') +
+                   `\n\nOverwrite these existing shifts?`;
+
+        proceed = confirm(msg);
+    }
+    if (!proceed) return;
+
+    // Build inserts
+    const allInserts = [];
+
+    selectedDays.forEach(dateStr => {
+        const existingShifts = scheduleData[dateStr] || [];
+        const alreadyScheduled = new Set(existingShifts.map(s => s.name));
+
+        // 1. Assigned specific areas (always add/overwrite)
+        Object.keys(assignments).forEach(area => {
+            allInserts.push({
+                date: dateStr,
+                member_name: assignments[area],
+                area: area,
+                status: 'working',
+                is_floater: false
+            });
+        });
+
+        // 2. Only add Floaters for workers who have NO shift yet on this day
+        allMembers.forEach(member => {
+            const name = member.full_name;
+            if (!assignedMembers.has(name) && !alreadyScheduled.has(name)) {
+                allInserts.push({
+                    date: dateStr,
+                    member_name: name,
+                    area: "Floater",
+                    status: 'working',
+                    is_floater: true
+                });
+            }
+        });
+    });
+
+    if (allInserts.length === 0) return alert("No changes to make.");
+
+    if (confirm(`Apply ${allInserts.length} shifts across ${selectedDays.length} days?`)) {
+        const { error } = await supabaseClient.from('schedule').insert(allInserts);
+
+        if (error) {
+            alert("Error: " + error.message);
+        } else {
+            alert(`✅ Crew assigned successfully!`);
+            hideBulkShiftModal();
+            await loadSchedule();
+            await renderCalendar();
+            renderMemberShiftBreakdown();
+        }
+    }
+}
+
+function hideBulkShiftModal() {
+    document.getElementById('bulkShiftModal').classList.remove('active');
+    clearSelection();
+}
+
 // ====================== LOAD MEMBERS INTO DROPDOWN (with certifications) ======================
 async function loadMembersIntoDropdown() {
     const memberSelect = document.getElementById('shiftMember');
@@ -2733,87 +2923,215 @@ function subscribeToGolfLeaderboard() {
 }
 
 // ====================== GOLF SCRAMBLE LEADERBOARD ======================
+// ====================== GOLF SCRAMBLE (Fixed Edit) ======================
+let currentGameId = null;
+let golfGames = [];
 let golfChannel = null;
 let autoRefreshInterval = null;
 
 async function loadGolfLeaderboard() {
-    const tbody = document.getElementById('leaderboardBody');
-    if (!tbody) {
-        console.error("❌ leaderboardBody not found in DOM");
-        return;
-    }
+  const tbody = document.getElementById('leaderboardBody');
+  const titleEl = document.getElementById('currentGameTitle');
 
-    tbody.innerHTML = `
-        <tr>
-          <td colspan="7" style="text-align:center; padding:60px; color:#00C7B2;">
-            <i class="fas fa-spinner fa-spin"></i><br><br>Loading leaderboard...
-          </td>
-        </tr>`;
+  if (!tbody) return;
 
-    console.log("🔄 Starting loadGolfLeaderboard at", new Date().toLocaleTimeString());
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:60px;color:#00C7B2;">Loading...</td></tr>`;
 
-    try {
-        const { data, error } = await supabaseClient
-            .from('golf_teams')
-            .select('*')
-            .order('score', { ascending: true });
+  const { data: games } = await supabaseClient
+    .from('golf_games')
+    .select('*')
+    .order('game_date', { ascending: false });
 
-        console.log("📊 Supabase response:", { 
-            rows: data ? data.length : 0, 
-            firstRow: data && data.length > 0 ? data[0] : null,
-            error: error 
-        });
+  golfGames = games || [];
+  renderGameSelect();
 
-        if (error) throw error;
+  if (!currentGameId && games?.length) currentGameId = games[0].id;
 
-        tbody.innerHTML = '';
+  if (!currentGameId) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:80px;color:#9ca3af;">No games yet.<br><button onclick="showNewGameModal()" class="add-team-btn" style="margin-top:12px;">Create First Game</button></td></tr>`;
+    return;
+  }
 
-        if (!data || data.length === 0) {
-            console.warn("⚠️ No teams returned");
-            tbody.innerHTML = `
-                <tr>
-                  <td colspan="7" style="text-align:center; padding:80px; color:#9ca3af;">
-                    No teams found.<br><br>
-                    <button onclick="showAddTeamModal()" class="add-team-btn">
-                        <i class="fas fa-plus"></i> Add First Team
-                    </button>
-                  </td>
-                </tr>`;
-            return;
-        }
+  const currentGame = games.find(g => g.id === currentGameId);
+  titleEl.textContent = currentGame ? currentGame.game_name : "Current Game";
 
-        console.log(`✅ Successfully loaded ${data.length} teams`);
+  const { data: teams } = await supabaseClient
+    .from('golf_teams')
+    .select('*')
+    .eq('game_id', currentGameId)
+    .order('score', { ascending: true });
 
-        // Build the table rows
-        data.forEach((team, index) => {
-            const toPar = team.score || 0;
-            const toParText = toPar < 0 ? toPar : toPar === 0 ? 'E' : `+${toPar}`;
-            const toParClass = toPar < 0 ? 'topar-under' : toPar === 0 ? 'topar-even' : 'topar-over';
+  tbody.innerHTML = '';
 
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td style="font-weight:700; font-size:20px; color:#00C7B2; text-align:center;">${index + 1}</td>
-                <td style="font-weight:600; text-align:left; padding-left:12px;">${team.team_name || 'Unnamed Team'}</td>
-                <td style="color:#9ca3af; font-size:14.5px; text-align:left;">${team.players || '—'}</td>
-                <td style="font-weight:700; font-size:20px; color:#00C7B2; text-align:center;">${team.score || 0}</td>
-                <td style="font-weight:500; text-align:center;">${team.thru || 'F'}</td>
-                <td class="${toParClass}" style="font-weight:700; font-size:19px; text-align:center;">${toParText}</td>
-                <td style="text-align:center;">
-                    <button onclick="editTeam('${team.id}')" style="background:none;border:none;color:#00C7B2;font-size:20px;cursor:pointer;">✏️</button>
-                </td>
-            `;
-            tbody.appendChild(row);
-        });
+  if (!teams || teams.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:60px;color:#9ca3af;">No teams in this game yet.</td></tr>`;
+    return;
+  }
 
-        // Update last updated with live timer
-        updateLastUpdatedTime();
+  teams.forEach((team, index) => {
+    const scores = Array.isArray(team.hole_scores) ? team.hole_scores : [];
+    const total = team.score || scores.reduce((sum, s) => sum + (s || 0), 0);
+    const completed = scores.filter(s => s > 0).length;
+    const toPar = total - 72;
+    const toParText = toPar < 0 ? toPar : (toPar === 0 ? 'E' : `+${toPar}`);
 
-    } catch (err) {
-        console.error("❌ Load error:", err);
-        tbody.innerHTML = `<tr><td colspan="7" style="padding:40px; color:#ef4444; text-align:center;">Error loading data</td></tr>`;
-    }
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td style="font-weight:700;font-size:20px;color:#00C7B2;text-align:center;">${index+1}</td>
+      <td style="font-weight:600;">${team.team_name}</td>
+      <td style="color:#9ca3af;font-size:14px;">${team.players || '—'}</td>
+      <td style="font-weight:700;font-size:22px;color:#00C7B2;">${total}</td>
+      <td style="font-weight:500;">${toParText}</td>
+      <td style="font-size:13px;color:#a0d8ff;">${completed}/18</td>
+      <td><button onclick="editTeam('${team.id}')" style="background:none;border:none;color:#00C7B2;font-size:22px;cursor:pointer;">✏️</button></td>
+    `;
+    tbody.appendChild(row);
+  });
+
+  updateLastUpdatedTime();
 }
 
+function renderGameSelect() {
+  const select = document.getElementById('gameSelect');
+  if (!select) return;
+  select.innerHTML = '';
+  golfGames.forEach(game => {
+    const opt = document.createElement('option');
+    opt.value = game.id;
+    opt.textContent = `${game.game_name} (${game.game_date})`;
+    if (game.id === currentGameId) opt.selected = true;
+    select.appendChild(opt);
+  });
+}
+
+function loadCurrentGame() {
+  currentGameId = document.getElementById('gameSelect').value;
+  loadGolfLeaderboard();
+}
+
+// ====================== MODALS ======================
+function showNewGameModal() {
+  document.getElementById('newGameModal').style.display = 'flex';
+}
+
+function hideNewGameModal() {
+  document.getElementById('newGameModal').style.display = 'none';
+}
+
+async function createNewGame() {
+  const name = document.getElementById('newGameName').value.trim();
+  if (!name) return alert("Game name required");
+  
+  const { data, error } = await supabaseClient
+    .from('golf_games')
+    .insert([{ game_name: name, course_name: document.getElementById('newCourseName').value.trim() || null }])
+    .select()
+    .single();
+
+  if (error) return alert("Error: " + error.message);
+
+  hideNewGameModal();
+  currentGameId = data.id;
+  loadGolfLeaderboard();
+}
+
+function showAddTeamModal() {
+  resetTeamModal();
+  document.getElementById('modalTeamTitle').textContent = 'Add New Team';
+  document.getElementById('teamModal').style.display = 'flex';
+}
+
+function resetTeamModal() {
+  document.getElementById('teamId').value = '';
+  document.getElementById('teamName').value = '';
+  document.getElementById('teamPlayers').value = '';
+  generateHoleInputs();
+}
+
+function generateHoleInputs() {
+  const container = document.getElementById('holeInputs');
+  container.innerHTML = '';
+  for (let i = 0; i < 18; i++) {
+    const div = document.createElement('div');
+    div.style.textAlign = 'center';
+    div.innerHTML = `
+      <small style="color:#9ca3af;">H${i+1}</small><br>
+      <input type="number" min="1" max="15" value="" 
+             class="hole-input" data-hole="${i}" 
+             style="width:55px; padding:8px; text-align:center; font-size:1.1rem; border-radius:6px;">
+    `;
+    container.appendChild(div);
+  }
+}
+
+async function editTeam(id) {
+  const { data: team, error } = await supabaseClient
+    .from('golf_teams')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !team) return alert("Could not load team data");
+
+  resetTeamModal();  // Clear previous state
+
+  document.getElementById('modalTeamTitle').textContent = 'Edit Team Scores';
+  document.getElementById('teamId').value = team.id;
+  document.getElementById('teamName').value = team.team_name || '';
+  document.getElementById('teamPlayers').value = team.players || '';
+
+  // Fill hole scores
+  const scores = Array.isArray(team.hole_scores) ? team.hole_scores : new Array(18).fill(0);
+  document.querySelectorAll('.hole-input').forEach(input => {
+    const holeIndex = parseInt(input.dataset.hole);
+    if (scores[holeIndex] > 0) input.value = scores[holeIndex];
+  });
+
+  document.getElementById('teamModal').style.display = 'flex';
+}
+
+async function saveTeam() {
+  const id = document.getElementById('teamId').value.trim();
+  const holeInputs = document.querySelectorAll('.hole-input');
+
+  const holeScores = Array.from(holeInputs).map(input => {
+    const val = parseInt(input.value);
+    return isNaN(val) || val < 1 ? 0 : val;
+  });
+
+  const totalScore = holeScores.reduce((a, b) => a + b, 0);
+
+  const teamData = {
+    team_name: document.getElementById('teamName').value.trim(),
+    players: document.getElementById('teamPlayers').value.trim(),
+    game_id: currentGameId,
+    hole_scores: holeScores,
+    score: totalScore,
+    updated_at: new Date().toISOString()
+  };
+
+  if (!teamData.team_name) return alert("Team name is required!");
+
+  let error;
+  if (id) {
+    ({ error } = await supabaseClient.from('golf_teams').update(teamData).eq('id', id));
+  } else {
+    ({ error } = await supabaseClient.from('golf_teams').insert([teamData]));
+  }
+
+  if (error) {
+    console.error(error);
+    return alert("Save failed: " + error.message);
+  }
+
+  hideTeamModal();
+  await loadGolfLeaderboard();
+  alert(id ? "✅ Scores updated!" : "✅ Team added!");
+}
+
+function hideTeamModal() {
+  document.getElementById('teamModal').style.display = 'none';
+}
 
 // ====================== TIMEZONE HELPER ======================
 const MOUNTAIN_TIMEZONE = 'America/Denver';
@@ -2909,6 +3227,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (closeModalBtn) closeModalBtn.addEventListener('click', () => document.getElementById('memberModal').classList.remove('active'));
     if (cancelBtn) cancelBtn.addEventListener('click', () => document.getElementById('memberModal').classList.remove('active'));
     if (memberForm) memberForm.addEventListener('submit', saveMember);
+    resetAllModalsAndSelections();
   }
 initTabs();  
 loadMemberChartDropdown();
@@ -2937,15 +3256,42 @@ window.getMyUserId = async function() {
     alert("✅ Your User ID is:\n\n" + user.id + "\n\nCopy this entire ID and paste it back to me.");
 };
 
+// ====================== CALENDAR PAGE SETUP - NO FLASH ======================
 if (document.getElementById('calendarGrid')) {
+    // Immediate strong reset
+    resetAllModalsAndSelections();
+
     await loadSchedule();
     await renderCalendar();
     loadMembersIntoDropdown();
-    loadMemberChartDropdown(); 
-    renderMemberShiftBreakdown();    
     setupDayDetailsCloseButton();
 
-}  
+    // Extra safety after render
+    setTimeout(resetAllModalsAndSelections, 50);
+    setTimeout(resetAllModalsAndSelections, 300);
+
+    document.getElementById('prevMonth').addEventListener('click', () => {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+        renderCalendar();
+    });
+    document.getElementById('nextMonth').addEventListener('click', () => {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        renderCalendar();
+    });
+    document.getElementById('todayBtn').addEventListener('click', () => {
+        currentDate = new Date();
+        renderCalendar();
+    });
+}
+
+// Safety reset - call on load and after operations
+function resetAllModalsAndSelections() {
+    clearSelection();
+    document.getElementById('dayDetails').classList.remove('open');
+    
+    const bulkModal = document.getElementById('bulkShiftModal');
+    if (bulkModal) bulkModal.classList.remove('active');
+}
 
 // ====================== FEED PAGE SETUP ======================
 if (document.getElementById('feedContainer')) {
@@ -3049,60 +3395,66 @@ function hideTeamModal() {
 }
 
 async function saveTeam() {
-    const id = document.getElementById('teamId').value.trim();
-    const teamData = {
-        team_name: document.getElementById('teamName').value.trim(),
-        players: document.getElementById('teamPlayers').value.trim(),
-        score: parseInt(document.getElementById('teamScore').value) || 0,
-        thru: document.getElementById('teamThru').value.trim() || 'F',
-        updated_at: new Date().toISOString()
-    };
+  const id = document.getElementById('teamId').value;
+  const holeInputs = document.querySelectorAll('.hole-input');
+  const holeScores = Array.from(holeInputs).map(input => parseInt(input.value) || 0);
 
-    if (!teamData.team_name) {
-        return alert("Team name is required!");
-    }
+  const teamData = {
+    team_name: document.getElementById('teamName').value.trim(),
+    players: document.getElementById('teamPlayers').value.trim(),
+    game_id: currentGameId,
+    hole_scores: holeScores,
+    score: holeScores.reduce((a, b) => a + b, 0),
+    updated_at: new Date().toISOString()
+  };
 
-    try {
-        let error;
-        if (id) {
-            ({ error } = await supabaseClient.from('golf_teams').update(teamData).eq('id', id));
-        } else {
-            ({ error } = await supabaseClient.from('golf_teams').insert([teamData]));
-        }
+  if (!teamData.team_name) return alert("Team name required!");
 
-        if (error) throw error;
+  let error;
+  if (id) {
+    ({ error } = await supabaseClient.from('golf_teams').update(teamData).eq('id', id));
+  } else {
+    ({ error } = await supabaseClient.from('golf_teams').insert([teamData]));
+  }
 
-        hideTeamModal();
-        await loadGolfLeaderboard();
-        console.log("✅ Team saved successfully");
-    } catch (err) {
-        console.error(err);
-        alert("Error saving team: " + (err.message || err));
-    }
+  if (error) return alert("Error: " + error.message);
+
+  hideTeamModal();
+  await loadGolfLeaderboard();
 }
 
 async function editTeam(id) {
-    try {
-        const { data, error } = await supabaseClient
-            .from('golf_teams')
-            .select('*')
-            .eq('id', id)
-            .single();
+  const { data: team } = await supabaseClient
+    .from('golf_teams')
+    .select('*')
+    .eq('id', id)
+    .single();
 
-        if (error || !data) throw error || new Error("Team not found");
+  const modal = document.getElementById('teamModal');
+  modal.style.display = 'flex';
 
-        const modal = document.getElementById('teamModal');
-        modal.style.display = 'flex';
-        document.getElementById('modalTeamTitle').textContent = 'Edit Team';
-        document.getElementById('teamId').value = data.id;
-        document.getElementById('teamName').value = data.team_name || '';
-        document.getElementById('teamPlayers').value = data.players || '';
-        document.getElementById('teamScore').value = data.score || 0;
-        document.getElementById('teamThru').value = data.thru || 'F';
-    } catch (err) {
-        console.error(err);
-        alert("Failed to load team for editing");
-    }
+  document.getElementById('modalTeamTitle').textContent = 'Edit Team – Hole by Hole';
+  document.getElementById('teamId').value = team.id;
+  document.getElementById('teamName').value = team.team_name;
+  document.getElementById('teamPlayers').value = team.players || '';
+
+  // Show hole inputs
+  let html = '<div style="margin:20px 0;"><strong>Hole Scores (1-18)</strong><div id="holeInputs" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(60px,1fr));gap:8px;margin-top:12px;"></div></div>';
+  document.querySelector('.modal-content').insertAdjacentHTML('beforeend', html);
+
+  const container = document.getElementById('holeInputs');
+  const currentScores = Array.isArray(team.hole_scores) ? team.hole_scores : new Array(18).fill(0);
+
+  for (let i = 0; i < 18; i++) {
+    const div = document.createElement('div');
+    div.style.textAlign = 'center';
+    div.innerHTML = `
+      <small>H${i+1}</small><br>
+      <input type="number" min="1" max="15" value="${currentScores[i] || ''}" 
+             style="width:55px;padding:8px;text-align:center;" class="hole-input" data-hole="${i}">
+    `;
+    container.appendChild(div);
+  }
 }
 
 // Expose to onclick handlers in HTML

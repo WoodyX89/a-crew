@@ -1927,3 +1927,291 @@ td {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
 }
+/* ====================== BULK CREW ASSIGNMENT MODAL ====================== */
+.bulk-modal {
+    max-width: 700px;
+    background: #1e2937;
+    border-radius: 16px;
+}
+
+.bulk-modal .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(0, 199, 178, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.bulk-modal .modal-header h2 {
+    margin: 0;
+    color: #00C7B2;
+    font-size: 1.4rem;
+}
+
+.bulk-modal .modal-body {
+    padding: 20px;
+}
+
+.bulk-days-info {
+    font-weight: 600;
+    color: #a0d8ff;
+    margin-bottom: 20px;
+    font-size: 1.05rem;
+}
+
+.area-assignments-container {
+    max-height: 520px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-right: 8px;
+}
+
+.area-assignment-row select {
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(0,199,178,0.3);
+    color: white;
+    font-size: 1rem;
+    width: 100%;
+    max-width: 100%;
+}
+
+.area-assignment-row strong {
+    font-weight: 600;
+    color: #00C7B2;
+    white-space: nowrap;
+}
+
+.area-assignment-row select {
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(0,199,178,0.3);
+    color: white;
+    font-size: 1rem;
+    width: 100%;
+}
+
+/* ==================== MOBILE RESPONSIVE ==================== */
+@media (max-width: 640px) {
+    .bulk-modal {
+        margin: 10px 8px;
+        max-width: none;
+    }
+
+    .area-assignment-row {
+        grid-template-columns: 1fr;           /* Stack vertically */
+        gap: 8px;
+        padding: 12px 16px;
+    }
+
+    .area-assignment-row strong {
+        font-size: 1.05rem;
+    }
+
+    .bulk-modal .modal-body {
+        padding: 16px;
+    }
+
+    .area-assignments-container {
+        max-height: 420px;
+        gap: 10px;
+    }
+
+    /* Fix for long "Leave Unassigned" text */
+    .area-assignment-row select {
+        font-size: 0.95rem;
+        padding: 11px 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .area-assignment-row select option {
+        font-size: 0.95rem;
+        padding: 8px 12px;
+    }
+}
+/* Calendar Day Flags */
+.day-flags {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    display: flex;
+    gap: 3px;
+    font-size: 15px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.calendar-day {
+    position: relative;
+}
+
+.flag {
+    padding: 1px 5px;
+    border-radius: 6px;
+    line-height: 1;
+    cursor: help;
+}
+
+.red-flag {
+    background: #b91c1c;
+    color: white;
+}
+
+.yellow-flag {
+    background: #ca8a04;
+    color: black;
+}
+
+/* Mobile adjustments */
+@media (max-width: 640px) {
+    .day-flags {
+        bottom: 4px;
+        right: 4px;
+        font-size: 13px;
+        gap: 2px;
+    }
+}
+/* Unified Single Flag */
+.unified-flag {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    font-size: 18px;
+    z-index: 10;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+    transition: transform 0.2s;
+}
+
+.unified-flag:hover {
+    transform: scale(1.3);
+}
+
+.calendar-day {
+    position: relative;
+}
+
+/* Mobile adjustments */
+@media (max-width: 640px) {
+    .unified-flag {
+        bottom: 4px;
+        right: 4px;
+        font-size: 16px;
+    }
+}
+/* ====================== BULK MODAL - CLEAN TABS ====================== */
+.bulk-modal {
+    max-width: 720px;
+    background: #1e2937;
+    border-radius: 16px;
+}
+
+.bulk-modal .modal-header {
+    padding: 22px 26px;
+    border-bottom: 1px solid rgba(0,199,178,0.25);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.bulk-modal .modal-header h2 {
+    margin: 0;
+    color: #00C7B2;
+    font-size: 1.45rem;
+}
+
+.bulk-tabs {
+    display: flex;
+    background: rgba(0,0,0,0.2);
+    border-bottom: 1px solid rgba(0,199,178,0.2);
+}
+
+.bulk-tab-btn {
+    flex: 1;
+    padding: 16px 20px;
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-weight: 600;
+    font-size: 1.02rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.bulk-tab-btn.active {
+    color: white;
+    background: rgba(0,199,178,0.15);
+    border-bottom: 4px solid #00C7B2;
+}
+
+.bulk-tab-panel {
+    padding: 24px 0;
+}
+
+.bulk-days-info {
+    font-weight: 600;
+    color: #bae6fd;
+    margin-bottom: 18px;
+    font-size: 1.08rem;
+}
+
+/* Crew Assignment Rows */
+.area-assignments-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+.area-assignment-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 16px;
+    align-items: center;
+    padding: 14px 18px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(0,199,178,0.25);
+    border-radius: 12px;
+}
+
+.area-label {
+    font-weight: 600;
+    color: #00C7B2;
+}
+
+/* Time Off Members */
+.off-members-container {
+    max-height: 420px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.off-member-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 10px;
+    border: 1px solid rgba(148,163,184,0.2);
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+    .area-assignment-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .bulk-modal {
+        margin: 8px;
+    }
+}

@@ -59,7 +59,7 @@
                 <select id="shiftMember" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;"></select>
                 <select id="shiftStatus" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;">
                     <option value="working">Working</option>
-                    <option value="vacation">On Vacation</option>
+                    <option value="vacation">OFF</option>
                 </select>
                 <div id="singleAreaGroup">
                     <select id="shiftArea" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;">
@@ -133,43 +133,39 @@
         <div id="scheduleList" class="schedule-list"></div>
     </div>
 </div>
-<!-- Bulk Shift Modal -->
-<!-- Bulk Shift Modal -->
+<!-- BULK MODAL WITH TABS -->
 <div id="bulkShiftModal" class="modal">
-    <div class="modal-content" style="max-width: 480px;">
+    <div class="modal-content bulk-modal">
         <div class="modal-header">
-            <h2 id="bulkModalTitle">Add Shift to Multiple Days</h2>
+            <h2>Bulk Actions — Selected Days</h2>
             <button class="close-btn" onclick="hideBulkShiftModal()">✕</button>
         </div>
-        
-        <div class="modal-body" style="padding: 1.8rem;">
-            <p id="bulkDaysInfo" style="margin-bottom: 16px; color: #a0d8ff;"></p>
-            
-            <div class="form-group">
-                <label>Member</label>
-                <select id="bulkShiftMember" style="width:100%; padding:12px; border-radius:12px;"></select>
+
+        <!-- Tabs -->
+        <div class="bulk-tabs">
+            <button class="bulk-tab-btn active" onclick="switchBulkTab(0)">Crew Assignment</button>
+            <button class="bulk-tab-btn" onclick="switchBulkTab(1)">Book Time Off</button>
+        </div>
+
+        <!-- Tab Content -->
+        <div id="bulkTabContent" class="modal-body">
+            <!-- Crew Assignment Tab (default) -->
+            <div id="crewTab" class="bulk-tab-panel">
+                <p id="bulkDaysInfo" class="bulk-days-info"></p>
+                <div id="areaAssignmentsContainer" class="area-assignments-container"></div>
             </div>
 
-            <!-- This is the ORIGINAL Area dropdown we'll hide/show -->
-            <div class="form-group" id="bulkAreaGroup">
-                <label>Area</label>
-                <select id="bulkShiftArea" style="width:100%; padding:12px; border-radius:12px;">
-                    <option value="">Select Area...</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>Status</label>
-                <select id="bulkShiftStatus" style="width:100%; padding:12px; border-radius:12px;">
-                    <option value="working">Working</option>
-                    <option value="vacation">On Vacation</option>
-                </select>
+            <!-- Time Off Tab -->
+            <div id="offTab" class="bulk-tab-panel" style="display:none;">
+                <p id="offDaysInfo" class="bulk-days-info"></p>
+                <p style="margin-bottom:12px; color:#94a3b8;">Select members to mark as OFF:</p>
+                <div id="offMembersContainer" style="max-height:420px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>
             </div>
         </div>
 
         <div class="form-actions">
-            <button type="button" class="cancel-btn" onclick="hideBulkShiftModal()">Cancel</button>
-            <button type="button" class="save-btn" onclick="applyBulkShift()">Apply to All Selected Days</button>
+            <button onclick="hideBulkShiftModal()" class="cancel-btn">Cancel</button>
+            <button onclick="applyBulkAction()" class="save-btn">✅ Apply to All Selected Days</button>
         </div>
     </div>
 </div>
