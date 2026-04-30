@@ -66,6 +66,27 @@ function resetAllModalsAndSelections() {
     const bulkModal = document.getElementById('bulkShiftModal');
     if (bulkModal) bulkModal.classList.remove('active');
 }
+// ====================== MOUNTAIN TIME HELPER ======================
+function getMTDateTime() {
+    return new Date().toLocaleString('en-CA', { 
+        timeZone: 'America/Edmonton',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    }).replace(',', '');
+}
+
+// Force consistent Mountain Time handling
+function getMountainDateStr(dateStr) {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-CA', { timeZone: 'America/Edmonton' }); // YYYY-MM-DD in MT
+}
+
 // ====================== MEMBER-SPECIFIC VERTICAL SHIFT CHART (with dancing dropdown) ======================
 
 
@@ -106,6 +127,7 @@ async function loadMemberChartDropdown() {
         }
     });
 }
+
 // ====================== ENHANCED CREW OVERVIEW (Percentages by Month + Year + Plant) ======================
 async function renderMemberShiftBreakdown() {
     const container = document.getElementById('memberBreakdownContainer');
@@ -296,6 +318,7 @@ function renderMemberShiftChart(memberName) {
     });
 }
 
+
 // ====================== PERMISSION CHECK - TREVOR WOOD (Full Access) ======================
 async function hasScheduleEditPermission() {
     if (!currentUser) {
@@ -440,10 +463,20 @@ function renderPost(post) {
   const postId = post.id;
   postEl.dataset.postId = postId;
 
+  // === CLEAN LOCAL TIME FOR POST HEADER ===
+  const createdTime = new Date(post.created_at).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+  });
+
   let html = `
-    <div class="post-header">
-      <strong>${post.full_name || 'Crew Member'}</strong> • ${new Date(post.created_at).toLocaleString()}
-    </div>
+      <div class="post-header">
+        <strong>${post.full_name || 'Crew Member'}</strong> • ${createdTime}
+      </div>
   `;
 
   if (post.post_type !== 'poll' && post.content) {
@@ -492,15 +525,25 @@ function renderPost(post) {
     html += `</div>`;
   }
 
-  // Event
-  if (post.post_type === 'event' && post.event_title) {
-    html += `
-      <div class="event">
-        <strong>📅 ${post.event_title}</strong><br>
-        When: ${new Date(post.event_date).toLocaleString()}<br>
-        ${post.event_location ? `Where: ${post.event_location}<br>` : ''}
-        ${post.event_description || ''}
-      </div>`;
+// Event - Local Browser Time
+if (post.post_type === 'event' && post.event_title && post.event_date) {
+      const eventTime = new Date(post.event_date).toLocaleString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+      });
+
+      html += `
+        <div class="event">
+          <strong>📅 ${post.event_title}</strong><br>
+          When: ${eventTime}<br>
+          ${post.event_location ? `Where: ${post.event_location}<br>` : ''}
+          ${post.event_description || ''}
+        </div>`;
   }
 
   // Actions + Comment Input (Clean)
@@ -1512,50 +1555,38 @@ function hideEventModal() {
   if (modal) modal.style.display = 'none';
 }
 
-// ====================== CREATE EVENT ======================
 async function createEvent() {
-  if (!currentUser) {
-    return alert("You must be logged in to schedule events.");
-  }
+    if (!currentUser) return alert("You must be logged in.");
 
-  const title       = document.getElementById('eventTitle').value.trim();
-  const dateInput   = document.getElementById('eventDate').value;
-  const location    = document.getElementById('eventLocation').value.trim();
-  const description = document.getElementById('eventDesc').value.trim();
+    const title       = document.getElementById('eventTitle').value.trim();
+    const dateInput   = document.getElementById('eventDate').value;   // "2026-04-29T23:15"
+    const location    = document.getElementById('eventLocation').value.trim();
+    const description = document.getElementById('eventDesc').value.trim();
 
-  if (!title)     return alert("Event title is required.");
-  if (!dateInput) return alert("Please select a date and time.");
+    if (!title || !dateInput) return alert("Title and date/time are required.");
 
-  const eventDate = new Date(dateInput);
-  if (isNaN(eventDate.getTime())) {
-    return alert("Invalid date and time selected.");
-  }
+    const displayName = await getCurrentUserFullName();
 
-  const displayName = await getCurrentUserFullName();
+    const { error } = await supabaseClient.from('posts').insert({
+        user_id: currentUser.id,
+        full_name: displayName,
+        content: description || null,
+        post_type: 'event',
+        event_title: title,
+        event_date: dateInput,                    // ← Save exactly what user picked
+        event_location: location || null,
+        event_description: description || null,
+        likes: 0
+    });
 
-  const { error } = await supabaseClient.from('posts').insert({
-    user_id: currentUser.id,
-    full_name: displayName,                    // ← Full name
-    content: description || null,
-    post_type: 'event',
-    event_title: title,
-    event_date: eventDate.toISOString(),
-    event_location: location || null,
-    event_description: description || null,
-    likes: 0
-  });
-
-  if (error) {
-    console.error(error);
-    alert("Failed to schedule event: " + error.message);
-  } else {
-    hideEventModal();
-    alert("✅ Event scheduled successfully!");
-
-    if (document.getElementById('feedContainer')) {
-      loadFeed(currentSort);
+    if (error) {
+        alert("Failed to create event: " + error.message);
+    } else {
+        hideEventModal();
+        alert("✅ Event created successfully!");
+        loadFeed(currentSort);
+        if (typeof renderCalendar === 'function') renderCalendar();
     }
-  }
 }
 
 // ====================== OPEN MEMBER MODAL (Updated for dropdowns) ======================
@@ -1982,6 +2013,532 @@ async function renderCalendar() {
     renderShiftAreaChart();
 }
 
+// ====================== POST OT SHIFT FUNCTIONS ======================
+function showPostOTModal() {
+    hasScheduleEditPermission().then(hasPerm => {
+        if (!hasPerm) {
+            return alert("❌ Only Supervisors and LH members can post OT shifts.");
+        }
+
+        // Populate areas
+        const areaSelect = document.getElementById('otArea');
+        if (areaSelect) {
+            areaSelect.innerHTML = '<option value="">Any Area (Optional)</option>';
+            FIXED_AREAS.forEach(a => {
+                const opt = document.createElement('option');
+                opt.value = a.key;
+                opt.textContent = a.label;
+                areaSelect.appendChild(opt);
+            });
+        }
+
+        // Clear form
+        if (document.getElementById('otDate')) document.getElementById('otDate').value = '';
+        if (document.getElementById('otShiftType')) document.getElementById('otShiftType').value = 'Day';
+        if (document.getElementById('otDescription')) document.getElementById('otDescription').value = '';
+
+        document.getElementById('postOTModal').style.display = 'flex';
+    }).catch(err => console.error(err));
+}
+
+function hidePostOTModal() {
+    const modal = document.getElementById('postOTModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function postOTShift() {
+    const hasPerm = await hasScheduleEditPermission();
+    if (!hasPerm) return alert("❌ Permission denied.");
+
+    const date = document.getElementById('otDate')?.value;
+    const shiftType = document.getElementById('otShiftType')?.value || 'Day';
+    const area = document.getElementById('otArea')?.value || null;
+    const description = document.getElementById('otDescription')?.value?.trim() || null;
+    const hours = parseFloat(document.getElementById('otHours')?.value) || 12;
+
+    if (!date) return alert("Please select a date.");
+
+    const { error } = await supabaseClient
+        .from('overtime_shifts')
+        .insert([{
+            date: date,
+            shift_type: shiftType,
+            area: area,
+            description: description,
+            hours: hours,           // ← Now saves custom hours (defaults to 12)
+            posted_by: currentUser?.id,
+            status: 'open'
+        }]);
+
+    if (error) {
+        console.error(error);
+        alert("Failed to post OT shift:\n" + error.message);
+    } else {
+        alert(`✅ ${hours}-hour OT shift posted successfully!`);
+        hidePostOTModal();
+        loadOpenOTShifts();
+    }
+}
+// ====================== OVERTIME FUNCTIONS ======================
+
+async function loadOTLeaderboard() {
+    const tbody = document.getElementById('otLeaderboard')?.querySelector('tbody');
+    if (!tbody) return;
+
+    const hasEditPermission = await hasScheduleEditPermission();
+
+    const { data: shifts } = await supabaseClient
+        .from('overtime_shifts')
+        .select('*')
+        .eq('status', 'assigned')
+        .order('assigned_at', { ascending: false });
+
+    const otMap = {};
+    (shifts || []).forEach(s => {
+        const name = s.assigned_to;
+        if (!otMap[name]) otMap[name] = { hours: 0, count: 0, shifts: [] };
+        otMap[name].hours += Number(s.hours || 12);
+        otMap[name].count++;
+        otMap[name].shifts.push(s);
+    });
+
+    const sorted = Object.entries(otMap).sort((a, b) => a[1].hours - b[1].hours);
+
+    tbody.innerHTML = sorted.length 
+        ? sorted.map(([name, stats]) => `
+            <tr style="cursor:pointer;" onclick="showOTMemberDetails('${name}')">
+                <td style="padding:14px;"><strong>${name}</strong></td>
+                <td style="text-align:center; font-size:1.4rem; font-weight:700; color:#00C7B2;">
+                    ${stats.hours}
+                </td>
+                <td style="text-align:center;">${stats.count} shifts</td>
+            </tr>`).join('')
+        : `<tr><td colspan="3" style="padding:60px; text-align:center; color:#94a3b8;">No assigned OT yet</td></tr>`;
+}
+
+// ====================== OT MEMBER DETAIL MODAL ======================
+async function showOTMemberDetails(memberName) {
+    const hasPerm = await hasScheduleEditPermission();
+
+    const { data: shifts } = await supabaseClient
+        .from('overtime_shifts')
+        .select('*')
+        .eq('assigned_to', memberName)
+        .eq('status', 'assigned')
+        .order('date', { ascending: false });
+
+    let html = `<h3 style="margin:0 0 16px 0; color:#00C7B2;">${memberName} — All OT Shifts</h3>`;
+
+    if (!shifts || shifts.length === 0) {
+        html += `<p style="color:#94a3b8;">No assigned shifts found.</p>`;
+    } else {
+        html += `<div style="display:flex; flex-direction:column; gap:10px;">`;
+        shifts.forEach(shift => {
+            html += `
+                <div style="background:rgba(255,255,255,0.06); padding:14px; border-radius:10px; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong>${shift.date} — ${shift.shift_type}</strong><br>
+                        <span style="color:#a0d8ff;">${shift.hours || 12} hours</span>
+                        ${shift.area ? ` • ${shift.area}` : ''}
+                        ${shift.description ? `<br><small>${shift.description}</small>` : ''}
+                    </div>
+                    ${hasPerm ? `
+<div class="ot-action-group">
+    <button onclick="editOTShift('${shift.id}'); event.stopImmediatePropagation();" 
+            class="ot-action-btn ot-edit-btn">Edit Hours</button>
+    <button onclick="deleteOTShift('${shift.id}'); event.stopImmediatePropagation();" 
+            class="ot-action-btn ot-delete-btn">Delete</button>
+</div>` : ''}
+                </div>`;
+        });
+        html += `</div>`;
+    }
+
+    document.getElementById('otDetailContent').innerHTML = html;
+    document.getElementById('detailMemberName').textContent = `${memberName}'s OT History`;
+    document.getElementById('otDetailModal').style.display = 'flex';
+}
+
+function hideOTDetailModal() {
+    document.getElementById('otDetailModal').style.display = 'none';
+}
+
+let currentEditingOTId = null;
+
+function hideOTEditModal() {
+    document.getElementById('otEditModal').style.display = 'none';
+}
+
+async function editOTShift(shiftId) {
+    const hasPerm = await hasScheduleEditPermission();
+    if (!hasPerm) return alert("❌ Permission denied.");
+
+    const { data: shift } = await supabaseClient
+        .from('overtime_shifts')
+        .select('*')
+        .eq('id', shiftId)
+        .single();
+
+    if (!shift) return alert("Shift not found.");
+
+    currentEditingOTId = shiftId;
+
+    // Basic fields
+    document.getElementById('editOtDate').value = shift.date;
+    document.getElementById('editOtShiftType').value = shift.shift_type;
+    document.getElementById('editOtHours').value = shift.hours || 12;
+    document.getElementById('editOtDescription').value = shift.description || '';
+
+    // === Load ONLY certified areas (Yes OR Training) ===
+    const { data: member } = await supabaseClient
+        .from('members')
+        .select('*')
+        .eq('full_name', shift.assigned_to)
+        .single();
+
+    const areaSelect = document.getElementById('editOtArea');
+    areaSelect.innerHTML = '<option value="">Floater</option>';
+
+    if (member) {
+        FIXED_AREAS.forEach(a => {
+            let isQualified = false;
+
+            if (a.key === "Supervisor") {
+                isQualified = member.supervisor_status === 'Yes' || member.supervisor_status === 'Training';
+            } 
+            else if (a.key === "LH") {
+                isQualified = member.lh_status === 'Yes' || member.lh_status === 'Training';
+            } 
+            else if (a.key === "Pretreat") {
+                isQualified = member.pt_status === 'Yes' || member.pt_status === 'Training';
+            } 
+            else if (a.key === "Demin") {
+                isQualified = member.demin_status === 'Yes' || member.demin_status === 'Training';
+            } 
+            else if (a.key.startsWith("Field")) {
+                isQualified = member.field_status === 'Yes' || member.field_status === 'Training';
+            } 
+            else if (a.key.startsWith("Comp")) {
+                isQualified = member.comp_status === 'Yes' || member.comp_status === 'Training';
+            } 
+            else if (a.key.startsWith("Panel")) {
+                isQualified = member.panel_status === 'Yes' || member.panel_status === 'Training';
+            }
+
+            if (isQualified) {
+                const opt = document.createElement('option');
+                opt.value = a.key;
+                opt.textContent = a.label;
+                if (a.key === shift.area) opt.selected = true;
+                areaSelect.appendChild(opt);
+            }
+        });
+    }
+
+    document.getElementById('otEditModal').style.display = 'flex';
+}
+
+async function saveOTEdit() {
+    if (!currentEditingOTId) return alert("No shift selected.");
+
+    const hours = parseFloat(document.getElementById('editOtHours').value) || 12;
+    const area = document.getElementById('editOtArea').value || null;
+    const description = document.getElementById('editOtDescription').value.trim();
+
+    // Get current OT shift info
+    const { data: otShift, error: fetchError } = await supabaseClient
+        .from('overtime_shifts')
+        .select('date, assigned_to')
+        .eq('id', currentEditingOTId)
+        .single();
+
+    if (fetchError || !otShift) {
+        return alert("Could not find the OT shift.");
+    }
+
+    // 1. Update the OT shift
+    const { error: otError } = await supabaseClient
+        .from('overtime_shifts')
+        .update({
+            hours: hours,
+            area: area,
+            description: description
+        })
+        .eq('id', currentEditingOTId);
+
+    if (otError) {
+        return alert("Failed to update OT shift: " + otError.message);
+    }
+
+    // 2. Update the matching shift in the main schedule
+    if (otShift.date && otShift.assigned_to) {
+        const { error: schedError } = await supabaseClient
+            .from('schedule')
+            .update({
+                area: area || "Floater",
+                is_floater: area === null || area === ""
+            })
+            .eq('date', otShift.date)
+            .eq('member_name', otShift.assigned_to)
+            .eq('status', 'working');   // Only update working shifts
+
+        if (schedError) {
+            console.warn("Schedule update warning (this is okay):", schedError);
+        } else {
+            console.log("✅ Main schedule also updated");
+        }
+    }
+
+    alert("✅ OT Shift updated successfully. Added to main schedule!");
+
+    hideOTEditModal();
+    hideOTDetailModal();
+    await loadOTLeaderboard();
+    await loadOpenOTShifts();
+}
+
+function hideOTEditModal() {
+    document.getElementById('otEditModal').style.display = 'none';
+}
+
+async function deleteOTShift(shiftId) {
+    const hasPerm = await hasScheduleEditPermission();
+    if (!hasPerm) {
+        return alert("❌ Permission denied.");
+    }
+
+    if (!confirm("🗑️ Delete this OT shift permanently?\n\nThis will ALSO remove it from the main Crew Schedule if it exists.")) {
+        return;
+    }
+
+    // Get OT shift details first (so we can clean up schedule)
+    const { data: otShift } = await supabaseClient
+        .from('overtime_shifts')
+        .select('date, assigned_to')
+        .eq('id', shiftId)
+        .single();
+
+    // Delete from OT table
+    const { error: otError } = await supabaseClient
+        .from('overtime_shifts')
+        .delete()
+        .eq('id', shiftId);
+
+    if (otError) {
+        console.error(otError);
+        return alert("Failed to delete OT shift: " + otError.message);
+    }
+
+    // === Also delete from main schedule ===
+    if (otShift && otShift.date && otShift.assigned_to) {
+        const { error: scheduleError } = await supabaseClient
+            .from('schedule')
+            .delete()
+            .eq('date', otShift.date)
+            .eq('member_name', otShift.assigned_to);
+
+        if (scheduleError) {
+            console.warn("Schedule cleanup warning:", scheduleError);
+            // Don't block the delete if schedule cleanup fails
+        }
+    }
+
+    alert("✅ OT shift deleted and removed from main schedule.");
+
+    // Refresh everything
+    hideOTDetailModal();
+    await loadOTLeaderboard();
+    await loadOpenOTShifts();
+}
+async function loadOpenOTShifts() {
+    const container = document.getElementById('openOTContainer');
+    if (!container) return;
+
+    const { data: shifts } = await supabaseClient
+        .from('overtime_shifts')
+        .select('*')
+        .eq('status', 'open')
+        .order('date', { ascending: true });
+
+    if (!shifts || shifts.length === 0) {
+        container.innerHTML = `<p style="color:#94a3b8; text-align:center; padding:60px;">No open overtime shifts right now.</p>`;
+        return;
+    }
+
+    let html = '';
+
+    for (const shift of shifts) {
+        // Simple query - no join needed
+        const { data: bids } = await supabaseClient
+            .from('overtime_bids')
+            .select('member_name, created_at')
+            .eq('overtime_shift_id', shift.id)
+            .order('created_at', { ascending: true });
+
+        const bidCount = bids ? bids.length : 0;
+        const bidderList = bids && bids.length 
+            ? bids.map(b => b.member_name).join(', ')
+            : 'No bids yet';
+
+        html += `
+            <div class="card" style="margin-bottom:20px; padding:18px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <strong style="font-size:1.1rem;">
+                        ${shift.date} — ${shift.shift_type}
+                        ${shift.area ? `<span style="color:#00C7B2;">(${shift.area})</span>` : ''}
+                    </strong>
+                    <button onclick="placeBid('${shift.id}')" class="save-btn" style="padding:8px 20px;">Bid</button>
+                </div>
+                
+                ${shift.description ? `<p style="margin:8px 0 12px; color:#a0d8ff;">${shift.description}</p>` : ''}
+
+                ${shift.hours ? `<strong style="color:#00C7B2;">${shift.hours} hours</strong>` : ''}
+                <div style="background:rgba(255,255,255,0.06); padding:12px; border-radius:10px; font-size:0.95rem;">
+                    <strong>Bids (${bidCount})</strong><br>
+                    <span style="color:#bae6fd;">${bidderList}</span>
+                </div>
+
+                ${await hasScheduleEditPermission() ? `
+                <button onclick="awardOTShift('${shift.id}')" 
+        class="ot-action-btn ot-edit-btn" style="margin-top:12px;">
+    Award to Lowest OT
+</button>` : ''}
+            </div>
+        `;
+    }
+
+    container.innerHTML = html;
+}
+
+async function placeBid(shiftId) {
+    if (!currentUser) return alert("Please log in to bid.");
+
+    const { data: member } = await supabaseClient
+        .from('members')
+        .select('full_name')
+        .eq('id', currentUser.id)
+        .single();
+
+    const fullName = member?.full_name?.trim() || 
+                    (currentUser.email ? currentUser.email.split('@')[0] : "Unknown");
+
+    const { error } = await supabaseClient
+        .from('overtime_bids')
+        .insert([{
+            overtime_shift_id: shiftId,
+            member_name: fullName,
+            user_id: currentUser.id
+        }]);
+
+    if (error) {
+        if (error.message.includes('duplicate')) {
+            alert("You have already bid on this shift.");
+        } else {
+            alert("Error placing bid: " + error.message);
+        }
+    } else {
+        alert(`✅ Bid placed as ${fullName}`);
+        loadOpenOTShifts();   // Refresh immediately
+    }
+}
+
+async function awardOTShift(shiftId) {
+    const hasPerm = await hasScheduleEditPermission();
+    if (!hasPerm) {
+        return alert("❌ Only Supervisors and LH can award shifts.");
+    }
+
+    // Get bids and determine winner
+    const { data: bids } = await supabaseClient
+        .from('overtime_bids')
+        .select('member_name')
+        .eq('overtime_shift_id', shiftId);
+
+    if (!bids || bids.length === 0) {
+        return alert("No bids on this shift yet.");
+    }
+
+    const uniqueBidders = [...new Set(bids.map(b => b.member_name))];
+
+    const { data: allOT } = await supabaseClient
+        .from('overtime_shifts')
+        .select('assigned_to, hours')
+        .in('assigned_to', uniqueBidders)
+        .eq('status', 'assigned');
+
+    const otTotals = {};
+    (allOT || []).forEach(s => {
+        otTotals[s.assigned_to] = (otTotals[s.assigned_to] || 0) + Number(s.hours || 12);
+    });
+
+    let winner = null;
+    let lowestHours = Infinity;
+
+    uniqueBidders.forEach(name => {
+        const hours = otTotals[name] || 0;
+        if (hours < lowestHours) {
+            lowestHours = hours;
+            winner = name;
+        }
+    });
+
+    if (!winner) return alert("Could not determine winner.");
+
+    // === 1. Award the OT shift ===
+    const { data: otShift } = await supabaseClient
+        .from('overtime_shifts')
+        .select('*')
+        .eq('id', shiftId)
+        .single();
+
+    const { error: awardError } = await supabaseClient
+        .from('overtime_shifts')
+        .update({
+            status: 'assigned',
+            assigned_to: winner,
+            assigned_at: new Date().toISOString()
+        })
+        .eq('id', shiftId);
+
+    if (awardError) {
+        return alert("Failed to award OT: " + awardError.message);
+    }
+
+    // === 2. Ask for confirmation to add to main schedule ===
+    const addToSchedule = confirm(
+        `OT Shift awarded to ${winner} (${lowestHours} hours this year).\n\n` +
+        `Add this shift to the main Crew Schedule for ${otShift.date}?\n` +
+        `(Area: ${otShift.area || "Floater"})`
+    );
+
+    if (addToSchedule && otShift) {
+        const scheduleEntry = {
+            date: otShift.date,
+            member_name: winner,
+            area: otShift.area || "Floater",
+            status: 'working',
+            is_floater: !(otShift.area && otShift.area !== "Floater")
+        };
+
+        const { error: scheduleError } = await supabaseClient
+            .from('schedule')
+            .insert([scheduleEntry]);
+
+        if (scheduleError) {
+            console.error("Schedule insert error:", scheduleError);
+            alert("OT awarded, but failed to add to main schedule.");
+        } else {
+            alert(`✅ Awarded to ${winner} and added to schedule!`);
+        }
+    } else {
+        alert(`✅ Awarded to ${winner} (not added to schedule)`);
+    }
+
+    // Refresh views
+    loadOpenOTShifts();
+    loadOTLeaderboard();
+}
+
 // ====================== STRICT ONE WORKER PER AREA + BLOCK STABLE ======================
 async function autoPopulateCurrentMonth() {
     const hasPermission = await hasScheduleEditPermission();
@@ -2181,6 +2738,112 @@ async function clearCurrentMonth() {
     }
 }
 
+// ====================== EVENTS PAGE ======================
+async function loadEventsPage() {
+    const container = document.getElementById('eventsContainer');
+    if (!container) return;
+
+    container.innerHTML = '<p style="text-align:center; color:#94a3b8;">Loading events...</p>';
+
+    const { data: events, error } = await supabaseClient
+        .from('posts')
+        .select('*')
+        .eq('post_type', 'event')
+        .order('event_date', { ascending: true });
+
+    if (error) {
+        container.innerHTML = `<p style="color:#ef4444;">Error loading events</p>`;
+        return;
+    }
+
+    const now = new Date();
+    const upcoming = [];
+    const past = [];
+
+    events.forEach(event => {
+        const eventDate = new Date(event.event_date);
+        if (eventDate >= now) {
+            upcoming.push(event);
+        } else {
+            past.push(event);
+        }
+    });
+
+    // Show Upcoming by default
+    renderEvents(upcoming, 'upcoming');
+}
+
+function renderEvents(eventsList, tab) {
+    const container = document.getElementById('eventsContainer');
+    container.innerHTML = '';
+
+    if (eventsList.length === 0) {
+        container.innerHTML = `<p style="text-align:center; color:#94a3b8; padding:60px;">
+            ${tab === 'upcoming' ? 'No upcoming events' : 'No past events'}
+        </p>`;
+        return;
+    }
+
+    eventsList.forEach(event => {
+        const eventTime = new Date(event.event_date).toLocaleString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        });
+
+        const createdTime = new Date(event.created_at).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        });
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.style.padding = '18px';
+
+        card.innerHTML = `
+            <h3 style="margin:0 0 8px 0; color:#00C7B2;">${event.event_title}</h3>
+            <p><strong>📅 ${eventTime}</strong></p>
+            ${event.event_location ? `<p><strong>📍 ${event.event_location}</strong></p>` : ''}
+            ${event.event_description ? `<p style="margin-top:12px; color:#e0f0ff;">${event.event_description}</p>` : ''}
+            <small style="color:#94a3b8;">Posted by ${event.full_name || 'Crew'} • ${createdTime}</small>
+        `;
+
+        container.appendChild(card);
+    });
+}
+
+// Tab switching
+function initEventsTabs() {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            const tab = btn.dataset.tab;
+            const { data: events } = await supabaseClient
+                .from('posts')
+                .select('*')
+                .eq('post_type', 'event')
+                .order('event_date', { ascending: true });
+
+            const now = new Date();
+            const filtered = tab === 'upcoming' 
+                ? events.filter(e => new Date(e.event_date) >= now)
+                : events.filter(e => new Date(e.event_date) < now);
+
+            renderEvents(filtered, tab);
+        });
+    });
+}
+
 // ====================== HANDLE SINGLE CLICK ======================
 function handleDayClick(e, dayEl) {
     if (isDragging) return;   // Don't trigger click during drag
@@ -2195,15 +2858,23 @@ function handleDayClick(e, dayEl) {
     }
 }
 
-// ====================== DRAG / TOUCH START ======================
-function startDrag(e, dayEl) {
-    isDragging = true;
-    if (!multiSelectActive) {
-        selectedDays = [];
-        multiSelectActive = true;
-    }
+// ====================== IMPROVED MOBILE DRAG SELECTION ======================
+let dragTimeout = null;
 
-    toggleDaySelection(dayEl);   // Always add, never remove during drag
+function startDrag(e, dayEl) {
+    // Clear any previous timeout
+    if (dragTimeout) clearTimeout(dragTimeout);
+
+    isDragging = true;
+    dragStartElement = dayEl;
+
+    // Small delay before enabling multi-select (prevents accidental selection while scrolling)
+    dragTimeout = setTimeout(() => {
+        if (isDragging) {
+            multiSelectActive = true;
+            toggleDaySelection(dayEl);
+        }
+    }, 180); // 180ms delay — feels natural on mobile
 
     const moveHandler = (moveEvent) => onDragMove(moveEvent);
     const endHandler = () => endDrag(moveHandler, endHandler);
@@ -2212,6 +2883,29 @@ function startDrag(e, dayEl) {
     document.addEventListener('mouseup', endHandler);
     document.addEventListener('touchmove', moveHandler, { passive: false });
     document.addEventListener('touchend', endHandler);
+}
+
+function endDrag(moveHandler, endHandler) {
+    isDragging = false;
+    if (dragTimeout) {
+        clearTimeout(dragTimeout);
+        dragTimeout = null;
+    }
+
+    document.removeEventListener('mousemove', moveHandler);
+    document.removeEventListener('mouseup', endHandler);
+    document.removeEventListener('touchmove', moveHandler);
+    document.removeEventListener('touchend', endHandler);
+
+    // Only trigger bulk modal if we actually selected multiple days
+    if (selectedDays.length > 1) {
+        showBulkShiftModal();
+    } else if (selectedDays.length === 1) {
+        showDayDetails(selectedDays[0]);
+        clearSelection();
+    } else {
+        clearSelection();
+    }
 }
 
 function onDragMove(e) {
@@ -2224,7 +2918,7 @@ function onDragMove(e) {
     const element = document.elementFromPoint(clientX, clientY);
     
     if (element && element.classList.contains('calendar-day') && element.dataset.date) {
-        toggleDaySelection(element);   // Only add, never remove
+        toggleDaySelection(element);
     }
 }
 
@@ -2315,42 +3009,44 @@ function showDayDetails(dateStr) {
 
     // Events first
     if (events.length > 0) {
-        const h = document.createElement('h4'); h.textContent = 'Events'; h.style.color = '#eab308';
+        const h = document.createElement('h4'); 
+        h.textContent = 'Events'; 
+        h.style.color = '#eab308';
         list.appendChild(h);
+
         events.forEach(ev => {
             const div = document.createElement('div');
             div.className = 'shift-item event-item';
-            div.innerHTML = `<strong>📅 ${ev.event_title}</strong><br><small>${new Date(ev.event_date).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}</small>`;
+
+            // === FORCE MOUNTAIN TIME ===
+            const eventTime = new Date(ev.event_date).toLocaleString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+});
+
+div.innerHTML = `
+    <strong>📅 ${ev.event_title}</strong><br>
+    <span style="color:#a0d8ff;">${eventTime}</span><br>
+    ${ev.event_location ? `<strong>📍 ${ev.event_location}</strong><br>` : ''}
+    ${ev.event_description ? `<small>${ev.event_description}</small>` : ''}
+`;
             list.appendChild(div);
         });
     }
 
+    // Regular Shifts
     if (shifts.length > 0) {
-        const h = document.createElement('h4'); h.textContent = 'Shifts'; h.style.margin = '15px 0 8px 0';
+        const h = document.createElement('h4'); 
+        h.textContent = 'Shifts'; 
+        h.style.margin = '15px 0 8px 0';
         list.appendChild(h);
 
-        // === SORT IN YOUR EXACT ORDER ===
-        const orderMap = {
-            "Supervisor": 1,
-            "Vacation": 2,
-            "LH": 3,
-            "Panel 1": 4,
-            "Panel 2": 5,
-            "Comp 1": 6,
-            "Comp 2": 7,
-            "Field 1": 8,
-            "Field 2": 9,
-            "Demin": 10,
-            "Pretreat": 11,
-            "Floater": 12
-        };
-
-        shifts.sort((a, b) => {
-            const oa = orderMap[a.area] || 99;
-            const ob = orderMap[b.area] || 99;
-            return oa - ob;
-        });
-
+        // ... your existing shift sorting and display code ...
         shifts.forEach(shift => {
             const item = document.createElement('div');
             item.className = `shift-item ${shift.status}`;
@@ -3132,6 +3828,23 @@ async function saveTeam() {
 function hideTeamModal() {
   document.getElementById('teamModal').style.display = 'none';
 }
+// Force Mountain Time (Alberta)
+function formatMountainTime(dateStr) {
+    if (!dateStr) return "No date";
+    
+    const date = new Date(dateStr);
+    
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Edmonton',   // Mountain Time
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    }).format(date) + " (MT)";
+}
 
 // ====================== TIMEZONE HELPER ======================
 const MOUNTAIN_TIMEZONE = 'America/Denver';
@@ -3197,295 +3910,115 @@ window.showMyUserId = async function() {
 };
 // ====================== MAIN INITIALIZATION ======================
 document.addEventListener('DOMContentLoaded', async () => {
-  fetch('navbar.html')
-      .then(response => response.text())
-      .then(data => {
-        const placeholder = document.getElementById('navbar-placeholder');
-        if (placeholder) placeholder.innerHTML = data;
-        setTimeout(initMobileMenu, 100);
-      })
-      .catch(err => console.error('Error loading navbar:', err));
 
-  // ====================== MEMBERS PAGE SETUP ======================
-  if (document.getElementById('membersBody') || document.getElementById('membersList')) {
-    await loadUser();
-
-    if (!currentUser) {
-      alert("Please log in to manage members.");
-      return;
-    }
-
-    loadMembers();
-
-    const addMemberBtn = document.getElementById('addMemberBtn');
-    if (addMemberBtn) addMemberBtn.addEventListener('click', () => openMemberModal());
-
-    const closeModalBtn = document.getElementById('closeModal');
-    const cancelBtn = document.getElementById('cancelBtn');
-    const memberForm = document.getElementById('memberForm');
-
-    if (closeModalBtn) closeModalBtn.addEventListener('click', () => document.getElementById('memberModal').classList.remove('active'));
-    if (cancelBtn) cancelBtn.addEventListener('click', () => document.getElementById('memberModal').classList.remove('active'));
-    if (memberForm) memberForm.addEventListener('submit', saveMember);
-    resetAllModalsAndSelections();
-  }
-initTabs();  
-loadMemberChartDropdown();
-// ====================== DEBUG USER ID ======================
-window.getMyUserId = async function() {
-    console.log("🔍 Trying to load user...");
-
-    const { data: { user }, error } = await supabaseClient.auth.getUser();
-    
-    if (error) {
-        console.error("Auth Error:", error);
-        alert("Auth Error: " + error.message);
-        return;
-    }
-
-    if (!user) {
-        console.warn("No user found - not logged in?");
-        alert("You are not logged in. Please log in first.");
-        return;
-    }
-
-    currentUser = user;
-    console.log("%c✅ SUCCESS - Your User ID:", "color:#00ff00; font-size:18px;", user.id);
-    console.log("Email:", user.email);
-    
-    alert("✅ Your User ID is:\n\n" + user.id + "\n\nCopy this entire ID and paste it back to me.");
-};
-
-// ====================== CALENDAR PAGE SETUP - NO FLASH ======================
-if (document.getElementById('calendarGrid')) {
-    // Immediate strong reset
-    resetAllModalsAndSelections();
-
-    await loadSchedule();
-    await renderCalendar();
-    loadMembersIntoDropdown();
-    setupDayDetailsCloseButton();
-
-    // Extra safety after render
-    setTimeout(resetAllModalsAndSelections, 50);
-    setTimeout(resetAllModalsAndSelections, 300);
-
-    document.getElementById('prevMonth').addEventListener('click', () => {
-        currentDate.setMonth(currentDate.getMonth() - 1);
-        renderCalendar();
-    });
-    document.getElementById('nextMonth').addEventListener('click', () => {
-        currentDate.setMonth(currentDate.getMonth() + 1);
-        renderCalendar();
-    });
-    document.getElementById('todayBtn').addEventListener('click', () => {
-        currentDate = new Date();
-        renderCalendar();
-    });
-}
-
-// Safety reset - call on load and after operations
-function resetAllModalsAndSelections() {
-    clearSelection();
-    document.getElementById('dayDetails').classList.remove('open');
-    
-    const bulkModal = document.getElementById('bulkShiftModal');
-    if (bulkModal) bulkModal.classList.remove('active');
-}
-
-// ====================== FEED PAGE SETUP ======================
-if (document.getElementById('feedContainer')) {
-  await loadUser();
-  setupImagePreview();
-  await loadFeed('latest');
-  subscribeToFeed();
-
-
-    // === POLL MODAL LISTENERS - MOVED HERE ===
-    const pollModal = document.getElementById('pollModal');
-    if (pollModal) {
-      const closePollModal = document.getElementById('closePollModal');
-      const cancelPollBtn = document.getElementById('cancelPollBtn');
-      const createPollBtn = document.getElementById('createPollBtn');
-      const addPollOptionBtn = document.getElementById('addPollOptionBtn');
-
-      if (closePollModal) closePollModal.addEventListener('click', hidePollModal);
-      if (cancelPollBtn) cancelPollBtn.addEventListener('click', hidePollModal);
-      if (createPollBtn) createPollBtn.addEventListener('click', createPoll);
-      if (addPollOptionBtn) addPollOptionBtn.addEventListener('click', addPollOption);
-    }
-
-    // Event Modal Listeners
-// ====================== EVENT MODAL LISTENERS ======================
-const eventModal = document.getElementById('eventModal');
-if (eventModal) {
-  const closeEventModal = document.getElementById('closeEventModal');
-  const cancelEventBtn  = document.getElementById('cancelEventBtn');
-  const createEventBtn  = document.getElementById('createEventBtn');
-
-  if (closeEventModal) closeEventModal.addEventListener('click', hideEventModal);
-  if (cancelEventBtn)  cancelEventBtn.addEventListener('click', hideEventModal);
-  if (createEventBtn)  createEventBtn.addEventListener('click', createEvent);
-}
-  }
-  // ====================== GOLF LEADERBOARD PAGE SETUP (Fixed - Independent) ======================
-if (document.getElementById('leaderboardBody')) {
-    console.log("✅ Golf leaderboard page detected - initializing...");
+    // ====================== NAVBAR (Always loads on every page) ======================
+    fetch('navbar.html')
+        .then(response => response.text())
+        .then(data => {
+            const placeholder = document.getElementById('navbar-placeholder');
+            if (placeholder) {
+                placeholder.innerHTML = data;
+                setTimeout(initMobileMenu, 120);
+            }
+        })
+        .catch(err => console.error('Navbar load failed:', err));
 
     await loadUser();
 
-    // Give DOM time to load the table
-    setTimeout(async () => {
-        console.log("🔄 Calling loadGolfLeaderboard from golf.html");
+    // ====================== PAGE-SPECIFIC INITIALIZATIONS ======================
+
+    // Members Page
+    if (document.getElementById('membersBody') || document.getElementById('membersList')) {
+        loadMembers();
+        const addBtn = document.getElementById('addMemberBtn');
+        if (addBtn) addBtn.addEventListener('click', () => openMemberModal());
+    }
+
+        // Feed Page Setup - Poll & Event Listeners
+    if (document.getElementById('feedContainer')) {
+        await loadUser();
+        setupImagePreview();
+        await loadFeed('latest');
+        subscribeToFeed();
+
+        // Ensure modal buttons work
+        const pollModal = document.getElementById('pollModal');
+        if (pollModal) {
+            document.getElementById('closePollModal')?.addEventListener('click', hidePollModal);
+            document.getElementById('cancelPollBtn')?.addEventListener('click', hidePollModal);
+            document.getElementById('createPollBtn')?.addEventListener('click', createPoll);
+        }
+
+        const eventModal = document.getElementById('eventModal');
+        if (eventModal) {
+            document.getElementById('closeEventModal')?.addEventListener('click', hideEventModal);
+            document.getElementById('cancelEventBtn')?.addEventListener('click', hideEventModal);
+            document.getElementById('createEventBtn')?.addEventListener('click', createEvent);
+        }
+    }
+
+    // Calendar Page
+    if (document.getElementById('calendarGrid')) {
+        resetAllModalsAndSelections();
+        await loadSchedule();
+        await renderCalendar();
+        loadMembersIntoDropdown();
+        setupDayDetailsCloseButton();
+
+        document.getElementById('prevMonth')?.addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth()-1); renderCalendar(); });
+        document.getElementById('nextMonth')?.addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth()+1); renderCalendar(); });
+        document.getElementById('todayBtn')?.addEventListener('click', () => { currentDate = new Date(); renderCalendar(); });
+    }
+
+    // Feed Page
+    if (document.getElementById('feedContainer')) {
+        setupImagePreview();
+        await loadFeed('latest');
+        subscribeToFeed();
+    }
+
+    // Events Page
+    if (document.getElementById('eventsContainer')) {
+        await loadUser();
+        loadEventsPage();
+        initEventsTabs();
+    }
+
+    // Golf Page
+    if (document.getElementById('leaderboardBody')) {
         await loadGolfLeaderboard();
         subscribeToGolfLeaderboard();
+    }
 
-        // Auto-refresh every 15 seconds
-        if (!autoRefreshInterval) {
-            autoRefreshInterval = setInterval(() => {
-                loadGolfLeaderboard();
-            }, 30000);
-        }
-    }, 300);
+    // ====================== OVERTIME PAGE ======================
+    if (document.getElementById('otLeaderboard')) {
+        loadOTLeaderboard();
+        loadOpenOTShifts();
 
-}
-
-  // ====================== CALENDAR PAGE SETUP ======================
-  if (document.getElementById('calendarGrid')) {
-    await loadSchedule();
-    await renderCalendar();
-    loadMembersIntoDropdown();
-    setupDayDetailsCloseButton();
-
-    document.getElementById('prevMonth').addEventListener('click', () => {
-      currentDate.setMonth(currentDate.getMonth() - 1);
-      renderCalendar();
-    });
-    document.getElementById('nextMonth').addEventListener('click', () => {
-      currentDate.setMonth(currentDate.getMonth() + 1);
-      renderCalendar();
-    });
-    document.getElementById('todayBtn').addEventListener('click', () => {
-      currentDate = new Date();
-      renderCalendar();
-    });
-  }
-document.getElementById('autoPopulateBtn')?.addEventListener('click', autoPopulateCurrentMonth);});
-document.getElementById('clearMonthBtn')?.addEventListener('click', clearCurrentMonth);
-// ================================================
-// GOLF PAGE GLOBAL FUNCTIONS (Must be outside DOMContentLoaded)
-// ================================================
-
-function showAddTeamModal() {
-    const modal = document.getElementById('teamModal');
-    if (!modal) return console.error("Team modal not found on this page");
-    
-    modal.style.display = 'flex';
-    document.getElementById('modalTeamTitle').textContent = 'Add New Team';
-    document.getElementById('teamId').value = '';
-    document.getElementById('teamName').value = '';
-    document.getElementById('teamPlayers').value = '';
-    document.getElementById('teamScore').value = '0';
-    document.getElementById('teamThru').value = 'F';
-}
-
-function hideTeamModal() {
-    const modal = document.getElementById('teamModal');
-    if (modal) modal.style.display = 'none';
-}
-
-async function saveTeam() {
-  const id = document.getElementById('teamId').value;
-  const holeInputs = document.querySelectorAll('.hole-input');
-  const holeScores = Array.from(holeInputs).map(input => parseInt(input.value) || 0);
-
-  const teamData = {
-    team_name: document.getElementById('teamName').value.trim(),
-    players: document.getElementById('teamPlayers').value.trim(),
-    game_id: currentGameId,
-    hole_scores: holeScores,
-    score: holeScores.reduce((a, b) => a + b, 0),
-    updated_at: new Date().toISOString()
-  };
-
-  if (!teamData.team_name) return alert("Team name required!");
-
-  let error;
-  if (id) {
-    ({ error } = await supabaseClient.from('golf_teams').update(teamData).eq('id', id));
-  } else {
-    ({ error } = await supabaseClient.from('golf_teams').insert([teamData]));
-  }
-
-  if (error) return alert("Error: " + error.message);
-
-  hideTeamModal();
-  await loadGolfLeaderboard();
-}
-
-async function editTeam(id) {
-  const { data: team } = await supabaseClient
-    .from('golf_teams')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  const modal = document.getElementById('teamModal');
-  modal.style.display = 'flex';
-
-  document.getElementById('modalTeamTitle').textContent = 'Edit Team – Hole by Hole';
-  document.getElementById('teamId').value = team.id;
-  document.getElementById('teamName').value = team.team_name;
-  document.getElementById('teamPlayers').value = team.players || '';
-
-  // Show hole inputs
-  let html = '<div style="margin:20px 0;"><strong>Hole Scores (1-18)</strong><div id="holeInputs" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(60px,1fr));gap:8px;margin-top:12px;"></div></div>';
-  document.querySelector('.modal-content').insertAdjacentHTML('beforeend', html);
-
-  const container = document.getElementById('holeInputs');
-  const currentScores = Array.isArray(team.hole_scores) ? team.hole_scores : new Array(18).fill(0);
-
-  for (let i = 0; i < 18; i++) {
-    const div = document.createElement('div');
-    div.style.textAlign = 'center';
-    div.innerHTML = `
-      <small>H${i+1}</small><br>
-      <input type="number" min="1" max="15" value="${currentScores[i] || ''}" 
-             style="width:55px;padding:8px;text-align:center;" class="hole-input" data-hole="${i}">
-    `;
-    container.appendChild(div);
-  }
-}
-
-// Expose to onclick handlers in HTML
-window.showAddTeamModal = showAddTeamModal;
-window.hideTeamModal = hideTeamModal;
-window.saveTeam = saveTeam;
-window.editTeam = editTeam;
-
-let lastUpdatedTimestamp = null;
-
-function updateLastUpdatedTime() {
-    const el = document.getElementById('last-updated');
-    if (!el) return;
-
-    lastUpdatedTimestamp = Date.now();
-
-    function tick() {
-        if (!lastUpdatedTimestamp) return;
-        const secondsAgo = Math.floor((Date.now() - lastUpdatedTimestamp) / 1000);
-        
-        if (secondsAgo < 5) {
-            el.textContent = `Last updated: Just now`;
-        } else if (secondsAgo < 60) {
-            el.textContent = `Last updated: ${secondsAgo}s ago`;
-        } else {
-            const minutesAgo = Math.floor(secondsAgo / 60);
-            el.textContent = `Last updated: ${minutesAgo}m ago`;
+        if (Notification.permission === "default") {
+            Notification.requestPermission();
         }
     }
 
-    tick(); // initial call
-    // Update every 10 seconds
-    setInterval(tick, 10000);
-}
+    initTabs();
+    loadMemberChartDropdown();
+});
+
+// Expose global functions
+window.showPostOTModal = showPostOTModal;
+window.hidePostOTModal = hidePostOTModal;
+window.postOTShift = postOTShift;
+window.placeBid = placeBid;
+window.awardOTShift = awardOTShift;
+window.editOTShift = editOTShift;
+window.deleteOTShift = deleteOTShift;
+window.showOTMemberDetails = showOTMemberDetails;
+window.hideOTDetailModal = hideOTDetailModal;
+window.hideOTEditModal = hideOTEditModal;
+window.saveOTEdit = saveOTEdit;
+window.showPollModal = showPollModal;
+window.hidePollModal = hidePollModal;
+window.showEventModal = showEventModal;
+window.hideEventModal = hideEventModal;
+window.createPoll = createPoll;
+window.createEvent = createEvent;

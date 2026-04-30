@@ -2215,3 +2215,39 @@ td {
         margin: 8px;
     }
 }
+/* OT Action Buttons */
+.ot-action-btn {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+}
+
+.ot-edit-btn {
+    background: #eab308;
+    color: #124352;
+}
+
+.ot-edit-btn:hover {
+    background: #facc15;
+    transform: translateY(-1px);
+}
+
+.ot-delete-btn {
+    background: #ef4444;
+    color: white;
+}
+
+.ot-delete-btn:hover {
+    background: #f87171;
+    transform: translateY(-1px);
+}
+
+/* Small spacing fix */
+.ot-action-group {
+    display: flex;
+    gap: 8px;
+}

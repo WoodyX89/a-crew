@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Crew - Events</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div id="navbar-placeholder"></div>
+    <div class="main-content">
+        <h1 style="color:#00C7B2; margin-bottom:20px;">📅 Events</h1>
+
+        <!-- Tabs -->
+        <div class="tabs" style="margin-bottom:20px;">
+            <button class="tab-btn active" data-tab="upcoming">Upcoming Events</button>
+            <button class="tab-btn" data-tab="past">Past Events</button>
+        </div>
+
+        <div id="eventsContainer" style="display:flex; flex-direction:column; gap:16px;"></div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
