@@ -3322,45 +3322,63 @@ async function sendOTNotification(otShift) {
 async function setupOneSignalPush() {
     if (!currentUser) return;
 
-    try {
-        console.log("🚀 Initializing OneSignal...");
+    console.log("🚀 Initializing OneSignal...");
 
+    try {
         window.OneSignal = window.OneSignal || [];
 
         OneSignal.push(() => {
             OneSignal.init({
-                appId: "3784a6d5-400a-4685-9294-7b58a19ad012",   // ← Change this
+                appId: "3784a6d5-400a-4685-9294-7b58a19ad012",
                 allowLocalhostAsSecureOrigin: true,
                 notifyButton: { enable: false }
             });
         });
 
-        // Wait for initialization and get Player ID
-        setTimeout(async () => {
-            try {
-                const playerId = await OneSignal.getUserIdAsync();   // Correct method
-                console.log("✅ OneSignal Player ID:", playerId);
+        // Wait for SDK to initialize
+        setTimeout(() => {
+            OneSignal.push(async () => {
+                try {
+                    // Correct way to get Player ID
+                    OneSignal.getUserId((playerId) => {
+                        console.log("✅ OneSignal Player ID received:", playerId);
 
-                if (playerId) {
-                    const { error } = await supabaseClient
-                        .from('members')
-                        .update({ push_token: playerId })
-                        .eq('id', currentUser.id);
-
-                    if (error) {
-                        console.error("Failed to save token:", error);
-                    } else {
-                        console.log("✅ Player ID saved to database");
-                    }
+                        if (playerId) {
+                            supabaseClient
+                                .from('members')
+                                .update({ push_token: playerId })
+                                .eq('id', currentUser.id)
+                                .then(({ error }) => {
+                                    if (error) {
+                                        console.error("Failed to save token:", error);
+                                    } else {
+                                        console.log("✅ Player ID saved to database successfully");
+                                    }
+                                });
+                        } else {
+                            console.log("No Player ID yet - user may need to accept the prompt");
+                        }
+                    });
+                } catch (e) {
+                    console.error("Error getting Player ID:", e);
                 }
-            } catch (e) {
-                console.error("Error getting Player ID:", e);
-            }
-        }, 4000); // Give it 4 seconds to initialize
+            });
+        }, 4000); // Wait 4 seconds for initialization
 
     } catch (err) {
         console.error("OneSignal setup failed:", err);
     }
+}
+async function forceNotificationPrompt() {
+    if (!window.OneSignal) {
+        return alert("OneSignal not loaded yet. Refresh the page.");
+    }
+
+    OneSignal.push(() => {
+        OneSignal.showNativePrompt();   // This forces the permission popup
+    });
+
+    console.log("Native permission prompt shown");
 }
 
 // ====================== 10. GOLF ======================
