@@ -1,3 +1,18 @@
+<head>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.init({
+      appId: "3784a6d5-400a-4685-9294-7b58a19ad012",
+      safari_web_id: "web.onesignal.auto.24e91fba-47ec-4183-a873-89e8fb838de6",
+      notifyButton: {
+        enable: true,
+      },
+    });
+  });
+</script>
+</head>
 <!-- Navbar -->
 <nav class="navbar">
   <div class="nav-container">

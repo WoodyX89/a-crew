@@ -2251,3 +2251,16 @@ td {
     display: flex;
     gap: 8px;
 }
+#teamModal .modal-content {
+    max-height: 95vh !important;
+    height: 95vh !important;
+    width: 95% !important;
+    max-width: 520px !important;
+}
+
+#holeInputs {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}

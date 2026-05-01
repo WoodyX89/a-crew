@@ -60,6 +60,10 @@
       <button onclick="hideNewGameModal()" class="cancel-btn">Cancel</button>
       <button onclick="createNewGame()" class="create-btn">Create Game</button>
     </div>
+    <div class="form-group">
+  <label>Course Par <span style="color:#00C7B2;">(default 72)</span></label>
+  <input type="number" id="newCoursePar" value="72" min="60" max="80" style="width:100%; padding:10px; border-radius:8px;">
+</div>
   </div>
 </div>
 
@@ -76,6 +80,11 @@
       <div class="form-group">
         <label>Team Name</label>
         <input type="text" id="teamName" placeholder="e.g. The Mulligans">
+      </div>
+      <div class="form-group" style="margin-top:15px;">
+        <label>Course Par</label>
+        <input type="number" id="editCoursePar" value="72" min="60" max="80" 
+              style="width:100%; padding:10px; border-radius:8px; font-size:1.1rem;">
       </div>
       <div class="form-group">
         <label>Players (comma separated)</label>
