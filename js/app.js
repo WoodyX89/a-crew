@@ -3380,6 +3380,23 @@ async function forceNotificationPrompt() {
 
     console.log("Native permission prompt shown");
 }
+async function enableNotifications() {
+    if (!window.OneSignal) {
+        alert("OneSignal not loaded. Refresh the page.");
+        return;
+    }
+
+    try {
+        OneSignal.push(() => {
+            OneSignal.showNativePrompt();
+        });
+
+        console.log("Notification prompt shown from user click");
+    } catch (e) {
+        console.error(e);
+        alert("Could not show prompt: " + e.message);
+    }
+}
 
 // ====================== 10. GOLF ======================
 async function loadGolfLeaderboard() {
@@ -4208,6 +4225,7 @@ window.openHoleByHoleEditor = openHoleByHoleEditor;
 window.setupPushNotifications = setupPushNotifications;
 window.testPushNotification = testPushNotification;
 window.setupOneSignalPush = setupOneSignalPush;
+window.enableNotifications = enableNotifications;
 
 // Public Key KDSPjjpKfpL2pwEJWgvH9-OKJB4D-ZB2TnBlSaB2lZ4
 // Private Key GpUCAwPvqtXBhjbr0J7y6YaH6_zPkwVw0oneYh7XKcM
