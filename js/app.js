@@ -51,6 +51,7 @@ let dragStartElement = null;
 let currentEditingTeamId = null;
 let oneSignalPlayerId = null;
 let currentEditingCell = null;
+let selectedCells = [];
 
 
 // ====================== 3. HELPER FUNCTIONS ======================
@@ -245,6 +246,184 @@ async function applyBulkAction() {
         await applyBulkTimeOff();
     }
 }
+function enableSpreadsheetDragSelection() {
+    const table = document.querySelector('#spreadsheetContainer table');
+    if (!table) return;
+
+    // Disable text selection on the entire spreadsheet while dragging
+    table.style.userSelect = 'none';
+    table.style.webkitUserSelect = 'none';
+
+    const editableCells = document.querySelectorAll('#spreadsheetContainer .editable-cell');
+
+    editableCells.forEach(cell => {
+        cell.addEventListener('mousedown', startDrag);
+        cell.addEventListener('mouseenter', duringDrag);
+        cell.addEventListener('mouseup', endDrag);
+    });
+
+    function startDrag(e) {
+        if (e.button !== 0) return;
+        isDragging = true;
+        selectedCells = [];
+        selectCell(this);
+        e.preventDefault();
+        e.stopImmediatePropagation();
+    }
+
+    function duringDrag(e) {
+        if (isDragging) {
+            selectCell(this);
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
+    }
+
+    function endDrag(e) {
+        if (isDragging) {
+            isDragging = false;
+            if (selectedCells.length > 1) {
+                showBulkAssignModal();
+            } else if (selectedCells.length === 1) {
+                window.openMemberDropdown(selectedCells[0]);
+            }
+        }
+    }
+
+    // Global cleanup
+    document.addEventListener('mouseup', () => {
+        isDragging = false;
+    });
+}
+function selectCell(cell) {
+    if (!selectedCells.includes(cell)) {
+        selectedCells.push(cell);
+        cell.classList.add('selected');
+    }
+}
+window.showBulkAssignModal = async function() {
+    if (selectedCells.length === 0) return;
+
+    const firstCell = selectedCells[0];
+    const areaKey = firstCell.dataset.area; // Assume same area for simplicity (you can extend later)
+
+    // Reuse same logic as single dropdown
+    const { data: members } = await supabaseClient
+        .from('members')
+        .select('*')
+        .eq('status', 'Active')
+        .order('full_name');
+
+    const { data: offEntries } = await supabaseClient
+        .from('schedule')
+        .select('member_name')
+        .eq('date', firstCell.dataset.date) // using first date for OFF filter
+        .or('status.eq.off,area.eq.off');
+
+    const offMembers = new Set(offEntries?.map(o => o.member_name) || []);
+
+    let optionsHTML = `<option value="">— Unassigned —</option>`;
+
+    members.forEach(member => {
+        if (offMembers.has(member.full_name)) return;
+
+        let qualified = false;
+        if (areaKey === "Supervisor") {
+            qualified = member.supervisor_status === 'Yes' || member.supervisor_status === 'Training';
+        } else if (areaKey === "LH") {
+            qualified = member.lh_status === 'Yes' || member.lh_status === 'Training' ||
+                       member.left_hand === 'Yes' || member.lh === 'Yes';
+        } else {
+            qualified = canWorkArea(member, areaKey);
+        }
+
+        if (qualified) optionsHTML += `<option value="${member.full_name}">${member.full_name}</option>`;
+    });
+
+    const modalHTML = `
+        <div class="modal active" id="bulkEditModal">
+            <div class="modal-content" style="max-width:460px; width:90%;">
+                <div class="modal-header" style="position:relative;">
+                    <h2>Assign ${areaKey} to <strong>${selectedCells.length}</strong> cells</h2>
+                    <button class="close-btn" onclick="closeBulkModal()" style="position:absolute;top:12px;right:12px;font-size:1.8rem;">✕</button>
+                </div>
+                <div style="padding:24px;">
+                    <select id="bulkMemberSelect" style="width:100%; padding:14px; font-size:1.1rem; border-radius:12px;">
+                        ${optionsHTML}
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button onclick="closeBulkModal()" class="cancel-btn">Cancel</button>
+                    <button onclick="applyBulkAssignment()" class="save-btn">✅ Apply to All Selected</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('bulkEditModal')?.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+};
+window.applyBulkAssignment = async function() {
+    const select = document.getElementById('bulkMemberSelect');
+    const newName = select ? select.value.trim() : '';
+
+    if (!selectedCells.length) return;
+
+    for (const cell of selectedCells) {
+        const dateStr = cell.dataset.date;
+        const area = cell.dataset.area;
+
+        // Update database
+        await supabaseClient.from('schedule').delete().eq('date', dateStr).eq('area', area);
+
+        if (newName) {
+            await supabaseClient.from('schedule').insert([{
+                date: dateStr,
+                member_name: newName,
+                area: area,
+                status: 'working',
+                is_floater: false
+            }]);
+        }
+
+        // Immediate visual update
+        cell.textContent = newName || '— Unassigned —';
+        cell.style.transition = 'all 0.4s';
+        cell.style.backgroundColor = '#22c55e';
+
+        // Update in-memory cache (this was missing!)
+        if (!scheduleData[dateStr]) scheduleData[dateStr] = [];
+        
+        scheduleData[dateStr] = scheduleData[dateStr].filter(s => s.area !== area);
+        
+        if (newName) {
+            scheduleData[dateStr].push({
+                date: dateStr,
+                name: newName,
+                area: area,
+                status: 'working',
+                is_floater: false
+            });
+        }
+    }
+
+    // Clean up and full refresh
+    closeBulkModal();
+
+    setTimeout(() => {
+        // Remove green flash
+        document.querySelectorAll('.editable-cell').forEach(cell => {
+            cell.style.backgroundColor = '';
+        });
+        renderSpreadsheet();   // Full refresh with correct data
+    }, 600);
+};
+window.closeBulkModal = function() {
+    document.getElementById('bulkEditModal')?.remove();
+    // Deselect all
+    document.querySelectorAll('.editable-cell.selected').forEach(c => c.classList.remove('selected'));
+    selectedCells = [];
+};
 window.scheduleData = window.scheduleData || {};
 
 // ====================== 4. PERMISSION ======================
@@ -2731,18 +2910,20 @@ async function renderSpreadsheet() {
         .eq('status', 'Active')
         .order('full_name');
 
-    // Fetch ALL OFF entries for the entire month (more efficient)
+    // Fetch ALL OFF entries - now checks BOTH status='off' AND area='off'
     const { data: offEntries } = await supabaseClient
         .from('schedule')
         .select('date, member_name')
-        .eq('status', 'off')
+        .or(`status.eq.off,area.eq.off`)           // ← This catches both ways
         .in('date', workingDays);
 
     // Group OFF members by date
     const offByDate = {};
     offEntries?.forEach(entry => {
         if (!offByDate[entry.date]) offByDate[entry.date] = [];
-        offByDate[entry.date].push(entry.member_name);
+        if (!offByDate[entry.date].includes(entry.member_name)) {
+            offByDate[entry.date].push(entry.member_name);
+        }
     });
 
     let html = `
@@ -2759,7 +2940,10 @@ async function renderSpreadsheet() {
         const shifts = scheduleData[dateStr] || [];
         const shiftMap = {};
         shifts.forEach(s => {
-            if (s.area && s.status !== 'vacation') shiftMap[s.area] = s.name;
+            // Skip any entry where area is literally "off"
+            if (s.area && s.area !== 'off' && s.status !== 'vacation') {
+                shiftMap[s.area] = s.name;
+            }
         });
 
         const supUnassigned = !shiftMap["Supervisor"];
@@ -2768,12 +2952,16 @@ async function renderSpreadsheet() {
 
         const offMembers = offByDate[dateStr] || [];
         const notesText = offMembers.length > 0 
-            ? offMembers.join(', ') 
+            ? `OFF: ${offMembers.join(', ')}` 
             : '—';
 
         html += `<tr data-date="${dateStr}" ${bothCriticalMissing ? 'class="critical-missing-row"' : ''}>`;
         html += `<td><strong>${dateStr}</strong></td>`;
-        html += `<td>${new Date(dateStr).toLocaleDateString('en-US', {weekday: 'short'})}</td>`;
+
+        // FIXED: Correct day name (prevents timezone day shift)
+        const dateObj = new Date(dateStr + "T00:00:00");   // Force local midnight
+        const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+        html += `<td>${dayName}</td>`;
 
         FIXED_AREAS.forEach(area => {
             const current = shiftMap[area.key] || '— Unassigned —';
@@ -2803,6 +2991,7 @@ async function renderSpreadsheet() {
 
     html += `</tbody></table>`;
     container.innerHTML = html;
+    enableSpreadsheetDragSelection();
 }
 function initTabs() {
     const tabButtons = document.querySelectorAll('.tab-btn');
@@ -2883,19 +3072,19 @@ window.openMemberDropdown = async function(cell) {
         .eq('status', 'Active')
         .order('full_name');
 
-    // Fetch ALL members who are OFF on this date (any area)
+    // Fetch ALL members who are OFF on this date (status='off' OR area='off')
     const { data: offEntries } = await supabaseClient
         .from('schedule')
         .select('member_name')
         .eq('date', dateStr)
-        .eq('status', 'off');     // Change to 'vacation' if you use a different value
+        .or('status.eq.off,area.eq.off');     // ← This is the important change
 
     const offMembers = new Set(offEntries?.map(o => o.member_name) || []);
 
     let optionsHTML = `<option value="">— Unassigned —</option>`;
 
     members.forEach(member => {
-        // Completely skip anyone who is OFF on this date (in any area)
+        // Skip anyone who is OFF (either by status or by area='off')
         if (offMembers.has(member.full_name)) return;
 
         let qualified = false;
@@ -2904,8 +3093,8 @@ window.openMemberDropdown = async function(cell) {
             qualified = member.supervisor_status === 'Yes' || member.supervisor_status === 'Training';
         } 
         else if (areaKey === "LH") {
-            qualified = 
-                member.lh_status === 'Yes' || 
+            qualified =
+                member.lh_status === 'Yes' ||
                 member.lh_status === 'Training' ||
                 member.left_hand === 'Yes' ||
                 member.left_hand === true ||
@@ -2927,12 +3116,12 @@ window.openMemberDropdown = async function(cell) {
             <div class="modal-content" style="max-width:420px; width:90%;">
                 <div class="modal-header" style="position:relative;">
                     <h2>Assign ${areaKey}</h2>
-                    <button class="close-btn" onclick="closeCellModal()" 
+                    <button class="close-btn" onclick="closeCellModal()"
                             style="position:absolute;top:12px;right:12px;font-size:1.8rem;">✕</button>
                 </div>
                 <div style="padding:24px;">
                     <p style="margin-bottom:12px; color:#a0d8ff;">${dateStr}</p>
-                    <select id="cellMemberSelect" onchange="autoSaveCellSelection()" 
+                    <select id="cellMemberSelect" onchange="autoSaveCellSelection()"
                             style="width:100%; padding:14px; font-size:1.1rem; border-radius:12px;">
                         ${optionsHTML}
                     </select>
