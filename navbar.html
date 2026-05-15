@@ -1,14 +1,15 @@
 <head>
-  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<!-- ==================== OneSignal SDK ==================== -->
+<!-- ==================== OneSignal SDK (MUST BE IN <head>) ==================== -->
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+
 <script>
   window.OneSignalDeferred = window.OneSignalDeferred || [];
-  OneSignalDeferred.push(async function(OneSignal) {
-    await OneSignal.init({
+  OneSignalDeferred.push(function(OneSignal) {
+    OneSignal.init({
       appId: "3784a6d5-400a-4685-9294-7b58a19ad012",
-      safari_web_id: "web.onesignal.auto.24e91fba-47ec-4183-a873-89e8fb838de6",
-      notifyButton: {
-        enable: true,
-      },
+      allowLocalhostAsSecureOrigin: true,
+      notifyButton: { enable: true }   // Temporary: shows bell for testing
     });
   });
 </script>
@@ -73,6 +74,3 @@
     <button onclick="logout()" class="logout-btn mobile-logout">Logout</button>
   </div>
 </div>
-<button onclick="enableNotifications()" style="padding:10px 16px; background:#00C7B2; color:black; border:none; border-radius:8px; font-weight:600;">
-    🛎️ Enable Push Notifications
-    </button>

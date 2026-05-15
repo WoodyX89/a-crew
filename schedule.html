@@ -14,34 +14,26 @@
 <div id="navbar-placeholder"></div>
 
 <div class="main-content">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-        <h1 style="color: #00C7B2; margin: 0;">Crew Schedule</h1>
-    
-    </div>
+    <h1 style="color: #00C7B2; margin: 0 0 20px 0;">Crew Schedule</h1>
 
     <!-- TABS -->
     <div class="tabs">
         <button class="tab-btn active" data-tab="calendar">📅 Calendar</button>
-        <button class="tab-btn" data-tab="memberchart">📊 Member Charts</button>
+        <button class="tab-btn" data-tab="spreadsheet">📊 Spreadsheet</button>
+        <button class="tab-btn" data-tab="memberchart">📈 Member Charts</button>
         <button class="tab-btn" data-tab="crewoverview">📋 Crew Overview</button>
     </div>
 
-    <!-- TAB 1: Calendar -->
-    <div id="calendar-tab" class="tab-content">
+    <!-- CALENDAR TAB (Main Default) -->
+    <div id="calendar-tab" class="tab-content active">
         <div class="calendar-container">
             <div class="calendar-header">
                 <button id="prevMonth" class="nav-btn"><i class="fas fa-chevron-left"></i></button>
                 <div id="monthYear" class="month-year"></div>
                 <button id="nextMonth" class="nav-btn"><i class="fas fa-chevron-right"></i></button>
                 <button id="todayBtn" class="today-btn">Today</button>
-                
-                <button id="autoPopulateBtn" style="background:#10b981;color:white;padding:8px 20px;border:none;border-radius:8px;font-weight:600;margin-left:12px;cursor:pointer;">
-                    🔄 Auto Populate THIS Month
-                </button>
-                
-                <button id="clearMonthBtn" style="background:#ef4444;color:white;padding:8px 20px;border:none;border-radius:8px;font-weight:600;margin-left:8px;cursor:pointer;">
-                    🗑️ Clear This Month
-                </button>
+                <button id="autoPopulateBtn" class="action-btn">🔄 Auto Populate</button>
+                <button id="clearMonthBtn" class="action-btn danger">🗑️ Clear Month</button>
             </div>
             <div class="weekdays">
                 <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div>
@@ -54,83 +46,60 @@
         <div id="dayDetails" class="day-details">
             <button id="closeDetails" class="close-btn">✕</button>
             <h3 id="selectedDate"></h3>
-            <div style="margin: 20px 0; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px;">
+
+            <div class="add-shift-form">
                 <h4>Add Shift</h4>
-                <select id="shiftMember" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;"></select>
-                <select id="shiftStatus" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;">
+                <select id="shiftMember" style="width:100%; padding:12px; margin:8px 0;"></select>
+                <select id="shiftStatus" style="width:100%; padding:12px; margin:8px 0;">
                     <option value="working">Working</option>
-                    <option value="vacation">OFF</option>
+                    <option value="vacation">OFF (Vacation)</option>
                 </select>
                 <div id="singleAreaGroup">
-                    <select id="shiftArea" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;">
-                        <option value="">Select Area...</option>
-                    </select>
+                    <select id="shiftArea" style="width:100%; padding:12px; margin:8px 0;"></select>
                 </div>
-                <button onclick="addShift()" style="width:100%; padding:12px; margin-top:12px; background:#00C7B2; color:white; border:none; border-radius:10px; font-weight:600;">
-                    Add to Schedule
-                </button>
+                <button onclick="addShift()" class="save-btn" style="width:100%; margin-top:12px;">Add to Schedule</button>
             </div>
+
             <h4>Shifts for this day</h4>
             <div id="scheduleList" class="schedule-list"></div>
         </div>
     </div>
 
-    <!-- TAB 2: Member Charts -->
-    <div id="memberchart-tab" class="tab-content" style="display: none;">
+    <!-- SPREADSHEET TAB -->
+    <div id="spreadsheet-tab" class="tab-content">
         <div class="card">
-            <h3 style="margin-bottom: 12px; color: #00C7B2;">Member Shift Breakdown</h3>
-            <div style="margin-bottom: 20px; text-align: center;">
-                <select id="memberChartSelect" class="dancing-select">
-                    <option value="">Select Member to View Breakdown...</option>
-                </select>
+            <h3>📊 Full Month Spreadsheet</h3>
+            
+            <!-- Month Navigation (same style as calendar) -->
+            <div class="calendar-header" style="margin-bottom: 20px; justify-content: flex-start; gap: 12px;">
+                <button id="spreadsheetPrevMonth" class="nav-btn"><i class="fas fa-chevron-left"></i></button>
+                <div id="spreadsheetMonthYear" class="month-year" style="min-width: 180px; text-align: center;"></div>
+                <button id="spreadsheetNextMonth" class="nav-btn"><i class="fas fa-chevron-right"></i></button>
+                <button id="spreadsheetTodayBtn" class="today-btn">Today</button>
+                <button onclick="renderSpreadsheet()" class="action-btn" style="margin-left: auto;">🔄 Refresh Grid</button>
             </div>
+
+            <div id="spreadsheetContainer"></div>
+        </div>
+    </div>
+
+    <!-- MEMBER CHARTS TAB -->
+    <div id="memberchart-tab" class="tab-content">
+        <div class="card">
+            <h3>Member Shift Breakdown</h3>
+            <select id="memberChartSelect" class="dancing-select" style="margin-bottom:20px; width:100%;"></select>
             <div style="height: 420px;">
                 <canvas id="memberShiftChart"></canvas>
             </div>
         </div>
     </div>
 
-    <!-- TAB 3: Crew Overview -->
-    <div id="crewoverview-tab" class="tab-content" style="display: none;">
+    <!-- CREW OVERVIEW TAB -->
+    <div id="crewoverview-tab" class="tab-content">
         <div class="card">
-            <h3 style="margin-bottom: 20px; color: #00C7B2;">Crew Shift Data</h3>
-            <div id="memberBreakdownContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
-                <!-- Populated dynamically -->
-            </div>
+            <h3>Crew Shift Data</h3>
+            <div id="memberBreakdownContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;"></div>
         </div>
-    </div>
-</div>
-
-    <!-- Day Details -->
-    <div id="dayDetails" class="day-details">
-        <button id="closeDetails" class="close-btn">✕</button>
-        <h3 id="selectedDate"></h3>
-
-        <!-- Add Shift Form -->
-<div style="margin: 20px 0; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px;">
-    <h4>Add Shift</h4>
-    
-    <select id="shiftMember" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;"></select>
-    
-    <select id="shiftStatus" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;">
-        <option value="working">Working</option>
-        <option value="vacation">On Vacation</option>
-    </select>
-    
-    <!-- Area dropdown (will be hidden on Vacation) -->
-    <div id="singleAreaGroup">
-        <select id="shiftArea" style="width:100%; padding:12px; margin:8px 0; border-radius:8px;">
-            <option value="">Select Area...</option>
-        </select>
-    </div>
-
-    <button onclick="addShift()" style="width:100%; padding:12px; margin-top:12px; background:#00C7B2; color:white; border:none; border-radius:10px; font-weight:600;">
-        Add to Schedule
-    </button>
-</div>
-
-        <h4>Shifts for this day</h4>
-        <div id="scheduleList" class="schedule-list"></div>
     </div>
 </div>
 <!-- BULK MODAL WITH TABS -->
@@ -169,7 +138,6 @@
         </div>
     </div>
 </div>
-
 <script src="js/app.js"></script>
 </body>
 </html>

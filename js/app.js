@@ -9,7 +9,7 @@ const supabaseClient = supabase.createClient(
 
 // ====================== 1. CONSTANTS ======================
 const rotationCycle = 28;
-const workingDaysInCycle = [false,false,true,true,true,true,true,false,false,false,false,false,true,true,true,true,false,false,false,false,false,true,true,true,true,true,true,false,false];
+const workingDaysInCycle = [false,false,true,true,true,true,true,false,false,false,false,false,true,true,true,true,false,false,false,false,false,true,true,true,true,true,false,false,false];
 const rotationStartDate = new Date('2025-01-01');
 const FIXED_AREAS = [
     { key: "Supervisor", label: "Supervisor" },
@@ -50,6 +50,7 @@ let selectedFiles = [];
 let dragStartElement = null;
 let currentEditingTeamId = null;
 let oneSignalPlayerId = null;
+let currentEditingCell = null;
 
 
 // ====================== 3. HELPER FUNCTIONS ======================
@@ -244,6 +245,7 @@ async function applyBulkAction() {
         await applyBulkTimeOff();
     }
 }
+window.scheduleData = window.scheduleData || {};
 
 // ====================== 4. PERMISSION ======================
 async function hasScheduleEditPermission() {
@@ -2684,6 +2686,358 @@ function resetAddShiftForm() {
         addButton.onclick = addShift;
     }
 }
+function initTabsWithNewEditors() {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+
+            const tabId = btn.dataset.tab + '-tab';
+            const activeTab = document.getElementById(tabId);
+            if (activeTab) activeTab.style.display = 'block';
+
+            if (btn.dataset.tab === 'blockeditor') renderBlockEditor();
+            if (btn.dataset.tab === 'spreadsheet') renderSpreadsheet();
+            if (btn.dataset.tab === 'memberchart' && document.getElementById('memberChartSelect').value) {
+                renderMemberShiftChart(document.getElementById('memberChartSelect').value);
+            }
+            if (btn.dataset.tab === 'crewoverview') renderMemberShiftBreakdown();
+        });
+    });
+}
+async function renderSpreadsheet() {
+    const container = document.getElementById('spreadsheetContainer');
+    if (!container) return;
+
+    container.innerHTML = '<p style="text-align:center; padding:40px; color:#94a3b8;">Loading spreadsheet...</p>';
+
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const start = new Date(year, month, 1);
+    const workingDays = [];
+
+    while (start.getMonth() === month) {
+        const dateStr = start.toISOString().split('T')[0];
+        if (isWorkingDay(dateStr)) workingDays.push(dateStr);
+        start.setDate(start.getDate() + 1);
+    }
+
+    // Fetch Active members
+    const { data: allMembers } = await supabaseClient
+        .from('members')
+        .select('*')
+        .eq('status', 'Active')
+        .order('full_name');
+
+    // Fetch ALL OFF entries for the entire month (more efficient)
+    const { data: offEntries } = await supabaseClient
+        .from('schedule')
+        .select('date, member_name')
+        .eq('status', 'off')
+        .in('date', workingDays);
+
+    // Group OFF members by date
+    const offByDate = {};
+    offEntries?.forEach(entry => {
+        if (!offByDate[entry.date]) offByDate[entry.date] = [];
+        offByDate[entry.date].push(entry.member_name);
+    });
+
+    let html = `
+        <table class="spreadsheet-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Day</th>`;
+
+    FIXED_AREAS.forEach(area => html += `<th>${area.label}</th>`);
+    html += `<th>Notes / OFF</th></tr></thead><tbody>`;
+
+    for (const dateStr of workingDays) {
+        const shifts = scheduleData[dateStr] || [];
+        const shiftMap = {};
+        shifts.forEach(s => {
+            if (s.area && s.status !== 'vacation') shiftMap[s.area] = s.name;
+        });
+
+        const supUnassigned = !shiftMap["Supervisor"];
+        const lhUnassigned = !shiftMap["LH"];
+        const bothCriticalMissing = supUnassigned && lhUnassigned;
+
+        const offMembers = offByDate[dateStr] || [];
+        const notesText = offMembers.length > 0 
+            ? offMembers.join(', ') 
+            : '—';
+
+        html += `<tr data-date="${dateStr}" ${bothCriticalMissing ? 'class="critical-missing-row"' : ''}>`;
+        html += `<td><strong>${dateStr}</strong></td>`;
+        html += `<td>${new Date(dateStr).toLocaleDateString('en-US', {weekday: 'short'})}</td>`;
+
+        FIXED_AREAS.forEach(area => {
+            const current = shiftMap[area.key] || '— Unassigned —';
+            let extraClass = '';
+
+            if (current === '— Unassigned —') {
+                if (!["Supervisor", "LH"].includes(area.key)) {
+                    extraClass = 'unassigned-cell';
+                } else if (bothCriticalMissing) {
+                    extraClass = 'critical-unassigned';
+                }
+            }
+
+            html += `
+                <td class="editable-cell ${extraClass}" 
+                    data-date="${dateStr}" 
+                    data-area="${area.key}"
+                    onclick="window.openMemberDropdown(this)">
+                    ${current}
+                </td>`;
+        });
+
+        // Notes column
+        html += `<td class="notes-cell">${notesText}</td>`;
+        html += `</tr>`;
+    }
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+}
+function initTabs() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Deactivate everything
+            tabButtons.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+
+            // Activate selected tab
+            btn.classList.add('active');
+            const tabId = btn.dataset.tab + '-tab';
+            const activeTab = document.getElementById(tabId);
+            
+            if (activeTab) {
+                activeTab.classList.add('active');
+            }
+
+            // Refresh content only for the active tab
+            if (btn.dataset.tab === 'spreadsheet') {
+                renderSpreadsheet();
+            } else if (btn.dataset.tab === 'memberchart') {
+                const selected = document.getElementById('memberChartSelect').value;
+                if (selected) renderMemberShiftChart(selected);
+            } else if (btn.dataset.tab === 'crewoverview') {
+                renderMemberShiftBreakdown();
+            }
+        });
+    });
+}
+function printSchedule() {
+    const container = document.getElementById('spreadsheetContainer');
+    if (!container || !container.innerHTML.trim()) {
+        renderSpreadsheet(); // Auto-refresh if empty
+    }
+
+    const printWindow = window.open('', '_blank');
+    const currentMonth = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    printWindow.document.write(`
+        <html>
+        <head>
+            <title>Crew Schedule - ${currentMonth}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                th, td { border: 1px solid #333; padding: 10px; text-align: center; }
+                th { background: #00C7B2; color: white; }
+                tr:nth-child(even) { background: #f8f9fa; }
+                h1 { text-align: center; color: #00C7B2; }
+                @media print {
+                    button { display: none; }
+                    body { margin: 0; }
+                }
+            </style>
+        </head>
+        <body>
+            <h1>Crew Schedule - ${currentMonth}</h1>
+            ${container.innerHTML}
+            <script>window.print();</script>
+        </body>
+        </html>
+    `);
+
+    printWindow.document.close();
+}
+window.openMemberDropdown = async function(cell) {
+    currentEditingCell = cell;
+    const dateStr = cell.dataset.date;
+    const areaKey = cell.dataset.area;
+
+    // Fetch Active members
+    const { data: members } = await supabaseClient
+        .from('members')
+        .select('*')
+        .eq('status', 'Active')
+        .order('full_name');
+
+    // Fetch ALL members who are OFF on this date (any area)
+    const { data: offEntries } = await supabaseClient
+        .from('schedule')
+        .select('member_name')
+        .eq('date', dateStr)
+        .eq('status', 'off');     // Change to 'vacation' if you use a different value
+
+    const offMembers = new Set(offEntries?.map(o => o.member_name) || []);
+
+    let optionsHTML = `<option value="">— Unassigned —</option>`;
+
+    members.forEach(member => {
+        // Completely skip anyone who is OFF on this date (in any area)
+        if (offMembers.has(member.full_name)) return;
+
+        let qualified = false;
+
+        if (areaKey === "Supervisor") {
+            qualified = member.supervisor_status === 'Yes' || member.supervisor_status === 'Training';
+        } 
+        else if (areaKey === "LH") {
+            qualified = 
+                member.lh_status === 'Yes' || 
+                member.lh_status === 'Training' ||
+                member.left_hand === 'Yes' ||
+                member.left_hand === true ||
+                member.can_lh === true ||
+                member.lh_qualified === true ||
+                member.lh === 'Yes';
+        } 
+        else {
+            qualified = canWorkArea(member, areaKey);
+        }
+
+        if (qualified) {
+            optionsHTML += `<option value="${member.full_name}">${member.full_name}</option>`;
+        }
+    });
+
+    const modalHTML = `
+        <div class="modal active" id="cellEditModal">
+            <div class="modal-content" style="max-width:420px; width:90%;">
+                <div class="modal-header" style="position:relative;">
+                    <h2>Assign ${areaKey}</h2>
+                    <button class="close-btn" onclick="closeCellModal()" 
+                            style="position:absolute;top:12px;right:12px;font-size:1.8rem;">✕</button>
+                </div>
+                <div style="padding:24px;">
+                    <p style="margin-bottom:12px; color:#a0d8ff;">${dateStr}</p>
+                    <select id="cellMemberSelect" onchange="autoSaveCellSelection()" 
+                            style="width:100%; padding:14px; font-size:1.1rem; border-radius:12px;">
+                        ${optionsHTML}
+                    </select>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('cellEditModal')?.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    const select = document.getElementById('cellMemberSelect');
+    const currentText = cell.textContent.trim();
+    if (currentText !== '— Unassigned —') {
+        select.value = currentText;
+    }
+};
+window.autoSaveCellSelection = async function() {
+    const select = document.getElementById('cellMemberSelect');
+    if (!currentEditingCell || !select) return;
+
+    const newName = select.value.trim();
+    const dateStr = currentEditingCell.dataset.date;
+    const area = currentEditingCell.dataset.area;
+
+    // === 1. Update the Database ===
+    await supabaseClient.from('schedule').delete().eq('date', dateStr).eq('area', area);
+
+    if (newName) {
+        await supabaseClient.from('schedule').insert([{
+            date: dateStr,
+            member_name: newName,
+            area: area,
+            status: 'working',
+            is_floater: false
+        }]);
+    }
+
+    // === 2. Update the in-memory cache immediately ===
+    if (!scheduleData[dateStr]) scheduleData[dateStr] = [];
+    
+    // Remove old assignment for this area
+    scheduleData[dateStr] = scheduleData[dateStr].filter(s => s.area !== area);
+    
+    // Add new assignment
+    if (newName) {
+        scheduleData[dateStr].push({
+            date: dateStr,
+            name: newName,
+            area: area,
+            status: 'working',
+            is_floater: false
+        });
+    }
+
+    // === 3. Immediate visual update + green flash ===
+    currentEditingCell.textContent = newName || '— Unassigned —';
+    currentEditingCell.style.transition = 'all 0.4s';
+    currentEditingCell.style.backgroundColor = '#22c55e';
+
+    setTimeout(() => {
+        currentEditingCell.style.backgroundColor = '';
+        closeCellModal();
+        
+        // Re-render the whole table with the new data (now immediate)
+        renderSpreadsheet();
+    }, 500);
+};
+window.closeCellModal = function() {
+    document.getElementById('cellEditModal')?.remove();
+    currentEditingCell = null;
+};
+function initSpreadsheetNavigation() {
+    const prevBtn = document.getElementById('spreadsheetPrevMonth');
+    const nextBtn = document.getElementById('spreadsheetNextMonth');
+    const todayBtn = document.getElementById('spreadsheetTodayBtn');
+    const monthYearDisplay = document.getElementById('spreadsheetMonthYear');
+
+    function updateMonthDisplay() {
+        const options = { month: 'long', year: 'numeric' };
+        monthYearDisplay.textContent = currentDate.toLocaleDateString('en-US', options);
+    }
+
+    prevBtn.onclick = () => {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+        updateMonthDisplay();
+        renderSpreadsheet();
+    };
+
+    nextBtn.onclick = () => {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        updateMonthDisplay();
+        renderSpreadsheet();
+    };
+
+    todayBtn.onclick = () => {
+        currentDate = new Date();
+        updateMonthDisplay();
+        renderSpreadsheet();
+    };
+
+    // Initial display
+    updateMonthDisplay();
+}
+
 
 // Drag selection (latest version)
 function startDrag(e, dayEl) {
@@ -3317,57 +3671,73 @@ async function sendOTNotification(otShift) {
         console.error("Failed to send OT notifications:", err);
     }
 }
-
+// ====================== ONESIGNAL PUSH SETUP ======================
 // ====================== ONESIGNAL PUSH SETUP ======================
 async function setupOneSignalPush() {
-    if (!currentUser) return;
+    if (!currentUser) {
+        console.log("⏳ Waiting for login before OneSignal setup...");
+        return;
+    }
 
-    console.log("🚀 Initializing OneSignal...");
+    console.log("🚀 Starting OneSignal setup...");
 
-    try {
-        window.OneSignal = window.OneSignal || [];
+    // Wait a bit for the SDK to load if needed
+    const waitForSDK = () => new Promise(resolve => {
+        if (typeof window.OneSignalDeferred !== "undefined") {
+            resolve();
+        } else {
+            let attempts = 0;
+            const interval = setInterval(() => {
+                attempts++;
+                if (typeof window.OneSignalDeferred !== "undefined" || attempts > 15) {
+                    clearInterval(interval);
+                    resolve();
+                }
+            }, 300);
+        }
+    });
 
-        OneSignal.push(() => {
-            OneSignal.init({
+    await waitForSDK();
+
+    if (typeof window.OneSignalDeferred === "undefined") {
+        console.error("❌ OneSignal SDK not loaded. Check that the script tag is in <head>.");
+        return;
+    }
+
+    window.OneSignalDeferred.push(async function(OneSignal) {
+        try {
+            console.log("🔄 Initializing OneSignal...");
+
+            await OneSignal.init({
                 appId: "3784a6d5-400a-4685-9294-7b58a19ad012",
                 allowLocalhostAsSecureOrigin: true,
-                notifyButton: { enable: false }
-            });
-        });
-
-        // Wait for SDK to initialize
-        setTimeout(() => {
-            OneSignal.push(async () => {
-                try {
-                    // Correct way to get Player ID
-                    OneSignal.getUserId((playerId) => {
-                        console.log("✅ OneSignal Player ID received:", playerId);
-
-                        if (playerId) {
-                            supabaseClient
-                                .from('members')
-                                .update({ push_token: playerId })
-                                .eq('id', currentUser.id)
-                                .then(({ error }) => {
-                                    if (error) {
-                                        console.error("Failed to save token:", error);
-                                    } else {
-                                        console.log("✅ Player ID saved to database successfully");
-                                    }
-                                });
-                        } else {
-                            console.log("No Player ID yet - user may need to accept the prompt");
-                        }
-                    });
-                } catch (e) {
-                    console.error("Error getting Player ID:", e);
+                notifyButton: { enable: false },
+                welcomeNotification: {
+                    title: "A Crew",
+                    message: "Thanks for subscribing! OT alerts enabled."
                 }
             });
-        }, 4000); // Wait 4 seconds for initialization
 
-    } catch (err) {
-        console.error("OneSignal setup failed:", err);
-    }
+            const playerId = await OneSignal.getUserId();
+
+            if (playerId) {
+                console.log("✅ Player ID received:", playerId);
+
+                const { error } = await supabaseClient
+                    .from('members')
+                    .update({ push_token: playerId })
+                    .eq('id', currentUser.id);
+
+                if (error) console.error("DB save error:", error);
+                else console.log("✅ Player ID saved to Supabase");
+            } else {
+                console.warn("⚠️ No Player ID yet — user may not have granted permission");
+            }
+
+        } catch (err) {
+            console.error("OneSignal Error:", err);
+        }
+    });
 }
 async function forceNotificationPrompt() {
     if (!window.OneSignal) {
@@ -3397,6 +3767,51 @@ async function enableNotifications() {
         alert("Could not show prompt: " + e.message);
     }
 }
+// ====================== ONE SIGNAL DEBUG HELPER ======================
+window.forceOneSignalTest = async function() {
+    console.clear();
+    console.log("🧪 === OneSignal Debug Test Started ===");
+
+    if (typeof window.OneSignalDeferred === "undefined") {
+        console.error("❌ OneSignalDeferred is still undefined");
+        console.log("→ Make sure the script tag is in <head> and you did a hard refresh");
+        alert("OneSignal SDK not loaded.\n\nTry hard refresh (Cmd + Shift + R)");
+        return;
+    }
+
+    console.log("✅ OneSignalDeferred found!");
+
+    window.OneSignalDeferred.push(async function(OneSignal) {
+        try {
+            await OneSignal.init({
+                appId: "3784a6d5-400a-4685-9294-7b58a19ad012",
+                allowLocalhostAsSecureOrigin: true,
+                notifyButton: { enable: true }
+            });
+
+            console.log("📢 Showing permission prompt...");
+            await OneSignal.showNativePrompt();
+
+            setTimeout(async () => {
+                const playerId = await OneSignal.getUserId();
+                console.log("🔑 Player ID =", playerId);
+
+                if (playerId) {
+                    await supabaseClient
+                        .from('members')
+                        .update({ push_token: playerId })
+                        .eq('id', currentUser.id);
+                    alert("✅ Player ID Saved!\n\n" + playerId);
+                } else {
+                    alert("⚠️ Permission granted but no Player ID yet.\nTry again.");
+                }
+            }, 1500);
+
+        } catch (err) {
+            console.error("OneSignal Error:", err);
+        }
+    });
+};
 
 // ====================== 10. GOLF ======================
 async function loadGolfLeaderboard() {
@@ -3991,24 +4406,28 @@ function initTabs() {
 
     tabButtons.forEach(btn => {
         btn.addEventListener('click', () => {
+            // Remove active from all buttons and contents
             tabButtons.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+
+            // Activate selected
             btn.classList.add('active');
-
-            tabContents.forEach(content => content.style.display = 'none');
-
             const tabId = btn.dataset.tab + '-tab';
             const activeTab = document.getElementById(tabId);
             if (activeTab) {
-                activeTab.style.display = 'block';
-                
-                // Refresh analytics when switching to those tabs
-                if (btn.dataset.tab === 'memberchart') {
-                    const selected = document.getElementById('memberChartSelect').value;
-                    if (selected) renderMemberShiftChart(selected);
-                }
-                if (btn.dataset.tab === 'crewoverview') {
-                    renderMemberShiftBreakdown();
-                }
+                activeTab.classList.add('active');
+            }
+
+            // Refresh content when switching tabs
+            if (btn.dataset.tab === 'spreadsheet') {
+                renderSpreadsheet();
+            }
+            if (btn.dataset.tab === 'memberchart') {
+                const selected = document.getElementById('memberChartSelect').value;
+                if (selected) renderMemberShiftChart(selected);
+            }
+            if (btn.dataset.tab === 'crewoverview') {
+                renderMemberShiftBreakdown();
             }
         });
     });
@@ -4082,10 +4501,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await loadUser();
 
-    // After loadUser()
-    setTimeout(() => {
-        if (currentUser) setupOneSignalPush();
-    }, 2000);
+    // Setup OneSignal after user is loaded
+    if (currentUser) {
+        setupOneSignalPush();
+    }
 
     // Page routing
     // ====================== CALENDAR PAGE INITIALIZATION ======================
@@ -4098,6 +4517,7 @@ if (document.getElementById('calendarGrid')) {
     const todayBtn = document.getElementById('todayBtn');
     const autoBtn = document.getElementById('autoPopulateBtn');
     const clearBtn = document.getElementById('clearMonthBtn');
+    
 
     if (prevBtn) {
         prevBtn.addEventListener('click', () => {
@@ -4127,6 +4547,7 @@ if (document.getElementById('calendarGrid')) {
     if (clearBtn) {
         clearBtn.addEventListener('click', clearCurrentMonth);
     }
+
 
     // Now load the calendar
     await loadSchedule();
@@ -4158,6 +4579,8 @@ if (document.getElementById('calendarGrid')) {
     if (document.getElementById('membersBody') || document.getElementById('membersList')) {
         loadMembers();
     }
+    if (document.getElementById('calendar-tab').classList.add('active'));
+
     // Poll Modal Setup
     const pollModal = document.getElementById('pollModal');
     if (pollModal) {
@@ -4181,8 +4604,10 @@ if (document.getElementById('calendarGrid')) {
         if (createBtn) createBtn.addEventListener('click', createEvent);
     }
 
+
     initTabs();
     loadMemberChartDropdown();
+    initSpreadsheetNavigation();
 });
 
 // ====================== 15. GLOBAL EXPOSURES ======================
@@ -4226,6 +4651,81 @@ window.setupPushNotifications = setupPushNotifications;
 window.testPushNotification = testPushNotification;
 window.setupOneSignalPush = setupOneSignalPush;
 window.enableNotifications = enableNotifications;
+window.exportSpreadsheet = function() {
+    const table = document.querySelector('#spreadsheetContainer table');
+    if (!table) {
+        alert("Please refresh the spreadsheet first.");
+        return;
+    }
+
+    let csv = "Date,Day";
+    FIXED_AREAS.forEach(a => csv += `,${a.label}`);
+    csv += "\n";
+
+    table.querySelectorAll('tbody tr').forEach(row => {
+        const cells = Array.from(row.cells).map(cell => `"${cell.textContent.trim()}"`);
+        csv += cells.join(',') + "\n";
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Crew_Schedule_${currentDate.toISOString().slice(0,7)}.csv`;
+    a.click();
+};
+window.forceOneSignalTest = forceOneSignalTest;
+window.updateSpreadsheetCell = async function(selectEl) {
+    const dateStr = selectEl.dataset.date;
+    const area = selectEl.dataset.area;
+    const newMemberName = selectEl.value.trim();
+
+    if (!dateStr || !area) return;
+
+    // Remove existing assignment for this area/date
+    await supabaseClient
+        .from('schedule')
+        .delete()
+        .eq('date', dateStr)
+        .eq('area', area);
+
+    // Insert new assignment if someone is selected
+    if (newMemberName) {
+        await supabaseClient.from('schedule').insert([{
+            date: dateStr,
+            member_name: newMemberName,
+            area: area,
+            status: 'working',
+            is_floater: false
+        }]);
+    }
+
+    // Optional: small visual feedback
+    selectEl.style.backgroundColor = '#00C7B2';
+    setTimeout(() => {
+        selectEl.style.backgroundColor = '';
+    }, 600);
+};
+window.exportSpreadsheet = () => {
+    const rows = document.querySelectorAll('#spreadsheetContainer tr');
+    let csv = "Date,Day";
+    FIXED_AREAS.forEach(a => csv += `,${a.label}`);
+    csv += "\n";
+
+    rows.forEach(row => {
+        if (row.cells.length < 3) return;
+        const cells = Array.from(row.cells).map(c => `"${c.textContent.trim()}"`);
+        csv += cells.join(',') + "\n";
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `schedule_${currentDate.toISOString().slice(0,7)}.csv`;
+    a.click();
+};
+
 
 // Public Key KDSPjjpKfpL2pwEJWgvH9-OKJB4D-ZB2TnBlSaB2lZ4
 // Private Key GpUCAwPvqtXBhjbr0J7y6YaH6_zPkwVw0oneYh7XKcM

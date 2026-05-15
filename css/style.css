@@ -2264,3 +2264,119 @@ td {
     display: flex;
     flex-direction: column;
 }
+
+.spreadsheet-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+.spreadsheet-table th, .spreadsheet-table td {
+    padding: 10px 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+    text-align: center;
+    white-space: nowrap;
+}
+.spreadsheet-table th {
+    background: #022f3a;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+.spreadsheet-table tr:nth-child(even) { background: rgba(255,255,255,0.03); }
+.area-cell { font-weight: 600; }
+.member-cell { text-align: left; }
+
+/* ==================== STRONG TAB ISOLATION ==================== */
+.tab-content {
+    display: none !important;
+}
+
+.tab-content.active {
+    display: block !important;
+}
+
+/* Make sure spreadsheet doesn't leak */
+#spreadsheet-tab {
+    display: none !important;
+}
+
+#spreadsheet-tab.active {
+    display: block !important;
+}
+
+/* Spreadsheet mobile friendliness */
+#spreadsheetContainer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    min-height: 500px;
+    max-height: 80vh;
+    border: 1px solid rgba(0,199,178,0.3);
+    border-radius: 12px;
+    background: #011f26;
+}
+
+.spreadsheet-table {
+    min-width: 950px; /* forces horizontal scroll on phones */
+    width: 100%;
+}
+
+/* Optional: Hide the old "(Desktop Only)" text */
+#spreadsheet-tab h3 span {
+    display: none;
+}
+
+/* Modal improvements */
+#cellEditModal .modal-content {
+    background: #022f3a;
+    border: 2px solid #00C7B2;
+}
+.unassigned-cell {
+    background: rgba(239, 68, 68, 0.25) !important;
+    border: 2px solid #ef4444 !important;
+    color: #fda4af;
+    font-weight: 600;
+}
+
+/* Combined border around Supervisor + LH when both are unassigned */
+.critical-unassigned {
+    background: rgba(239, 68, 68, 0.25) !important;
+    border: 2px solid #ef4444 !important;
+    color: #fda4af;
+    font-weight: 600;
+}
+
+/* Makes the two cells look like one continuous bordered block */
+.critical-missing-row td.critical-unassigned:first-of-type {
+    border-right: none !important;           /* Remove middle border */
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.critical-missing-row td.critical-unassigned:last-of-type {
+    border-left: none !important;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+.editable-cell {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.editable-cell:hover {
+    background: rgba(0, 199, 178, 0.25) !important;
+}
+.notes-cell {
+    text-align: left !important;
+    font-size: 0.9rem;
+    color: #facc15;
+    background: rgba(249, 115, 22, 0.1) !important;
+    min-width: 180px;
+    white-space: normal;
+    padding: 10px 8px !important;
+}
+
+.notes-cell:empty:before {
+    content: '—';
+    color: #64748b;
+}
